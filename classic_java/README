@@ -1,2 +1,0 @@
-минимальный пример работы с java оберткой классического интерфейса.
-для работы необходимо добавить путь до dll/so в java.library.path и classic_java_fr_drv_ng.jar в classpath
