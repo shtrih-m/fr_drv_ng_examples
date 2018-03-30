@@ -24,6 +24,13 @@ gradlew build
 ```bash
 java -Djava.library.path="." -cp "classic_java_fr_drv_ng-1.1.jar:com.example-1.0.jar" example
 ```
+### classic_fr_drv_ng_android_example
+Пример использования **classic_java** под android.
+
+### console_test
+Содержит примеры скриптов, использующих консольный тест драйвера.
+
+
 ### javapos
 Это java обретка для интерфейса unifiedpos (opos/javapos).
 Для запуска необходимы java библиотеки javapos, **javapos_fr_drv_ng-1.0.jar** и нативные библиотеки: **libcppbase_fr_drv_ng.so**, **libunifiedpos_fr_drv_ng.so**  
