@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">classic_fr_drv_ng_android_example</string>
+    <string-array name="uri_variants">
+        <item><![CDATA[tcp://192.168.137.111:7778?timeout=1000&protocol=v1]]></item>
+        <item><![CDATA[tcp://127.0.0.1:12345?timeout=1000&protocol=v2]]></item>
+        <item><![CDATA[btserial://000190C55E78?timeout=5000&protocol=v2]]></item>
+        <item><![CDATA[serial://ttyACM0?baudrate=115200&timeout=10000&protocol=v1]]></item>
+        <item><![CDATA[cdcacm://shtrih?timeout=1000&protocol=v1]]></item>
+    </string-array>
 </resources>
