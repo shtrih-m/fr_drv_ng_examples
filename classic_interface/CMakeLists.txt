@@ -12,4 +12,4 @@ link_directories(.)
 add_executable(classic_interface_example
   main.cpp
 )
-target_link_libraries(classic_interface_example classic_fr_drv_ng)
+target_link_libraries(classic_interface_example classic_fr_drv_ng cppbase_fr_drv_ng)
