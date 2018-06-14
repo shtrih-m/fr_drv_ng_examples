@@ -44,8 +44,7 @@ static void print2DBarcode(classic_interface& ci)
         executeAndHandleError(std::bind(&classic_interface::LoadAndPrint2DBarcode, &ci));
     }
 }
-
-static void printExampleReceipt(classic_interface& ci)
+static void prepareRecepit(classic_interface& ci)
 {
     executeAndHandleError(std::bind(&classic_interface::GetECRStatus, &ci)); //получаем статус
     switch (ci.Get_ECRMode()) {
@@ -58,32 +57,19 @@ static void printExampleReceipt(classic_interface& ci)
             &ci)); //если смена закрыта - открываем
         break;
     case 8:
-        executeAndHandleError(std::bind(&classic_interface::CancelCheck,
+        executeAndHandleError(std::bind(&classic_interface::SysAdminCancelCheck,
             &ci)); // отменяем документ если открыт
         break;
     }
-
-    executeAndHandleError(std::bind(&classic_interface::OpenCheck, &ci)); //открываем чек
-    ci.Set_Password(30);
-    ci.Set_Quantity(1.0);
-    ci.Set_Department(1);
-    ci.Set_Price(10000);
-    ci.Set_Tax1(0);
-    ci.Set_Tax2(0);
-    ci.Set_Tax3(0);
-    ci.Set_Tax4(0);
-    ci.Set_StringForPrinting(u8"Молоко");
-    executeAndHandleError(std::bind(&classic_interface::Sale, &ci));
-    ci.Set_Summ1(10000);
-    ci.Set_StringForPrinting(u8"строчка");
-    executeAndHandleError(std::bind(&classic_interface::CloseCheck, &ci));
 }
 
 static void print1Dbarcode(classic_interface& ci, const std::string& codeData)
 {
     ci.Set_BarCode(codeData);
-    ci.Set_LineNumber(50); //высота ШК в линиях
+    ci.Set_LineNumber(10); //высота ШК в линиях
     ci.Set_BarWidth(2); //ширина вертикальной линии ШК
+    executeAndHandleError(std::bind(&classic_interface::WaitForPrinting, &ci));
+
     for (const auto& codeType : { BC1D_Code128A, BC1D_Code39, BC1D_EAN13 }) {
         ci.Set_BarcodeType(codeType); //тип
         for (const auto& alignment : { TBarcodeAlignment::baCenter, TBarcodeAlignment::baLeft,
@@ -92,16 +78,52 @@ static void print1Dbarcode(classic_interface& ci, const std::string& codeData)
             for (const auto& text_alignment : { BCT_None, BCT_Above, BCT_Below, BCT_Both }) {
                 ci.Set_PrintBarcodeText(text_alignment); //печать текста ШК
                 executeAndHandleError(std::bind(&classic_interface::PrintBarcodeLine, &ci));
+                executeAndHandleError(std::bind(&classic_interface::WaitForPrinting, &ci));
             }
         }
     }
+}
+
+/**
+ * @brief cashierReceipt
+ * @param ci
+ * @param cancel отменить чек
+ */
+static void cashierReceipt(classic_interface& ci, bool cancel = false)
+{
+    prepareRecepit(ci);
+    executeAndHandleError(
+        std::bind(&classic_interface::OpenCheck, &ci)); //открываем чек с паролем кассира
+    ci.Set_Quantity(1.0);
+    ci.Set_Department(0);
+    ci.Set_Price(10000);
+    ci.Set_Tax1(0);
+    ci.Set_Tax2(0);
+    ci.Set_Tax3(0);
+    ci.Set_Tax4(0);
+    ci.Set_StringForPrinting(u8"Молоко");
+    executeAndHandleError(std::bind(&classic_interface::Sale, &ci));
+    if (cancel) {
+        executeAndHandleError(std::bind(&classic_interface::SysAdminCancelCheck, &ci));
+        return;
+    }
+    ci.Set_Summ1(100000);
+    ci.Set_StringForPrinting(u8"строчка");
+    executeAndHandleError(std::bind(&classic_interface::CloseCheck, &ci));
+    executeAndHandleError(std::bind(&classic_interface::WaitForPrinting, &ci));
+}
+static void adminCancelReceipt(classic_interface& ci)
+{
+    cashierReceipt(ci, true);
 }
 
 int main(int argc, char* argv[])
 {
     try {
         classic_interface ci;
-        ci.Set_Password(30);
+        ci.Set_SysAdminPassword(30); //Пароль сист. администратора
+        ci.Set_Password(1); //Пароль кассира(может совпадать с паролем администратора)
+        ci.Set_AutoEoD(true); //Включаем обмен с ОФД средствами драйвера
         if (argc > 1) {
             //можно передать URI в качестве аргумента
             ci.Set_ConnectionURI(argv[1]);
@@ -110,10 +132,17 @@ int main(int argc, char* argv[])
                 "tcp://192.168.137.111:7778?timeout=3000&bytetimeout=1500&protocol=v1");
         }
         checkResult(ci.Connect()); //соединяемся
-        printExampleReceipt(ci); //пример чека
+        cashierReceipt(ci); //чек от кассира 1
+        adminCancelReceipt(ci); //открываем чек от имени кассира 1, отмена от администратора
+        ci.Set_Password(2);
+        cashierReceipt(ci); //чек от кассира 2
         print1Dbarcode(ci, "123456789"); //пример одномерных ШК
         print2DBarcode(ci); //пример QR кода
-        executeAndHandleError(std::bind(&classic_interface::FinishDocument, &ci));
+        ci.Set_StringQuantity(10); //кол-во строк промотки
+        ci.Set_UseReceiptRibbon(true); //использовать чековую лента
+        ci.Set_CutType(false); //полная отрезка
+        executeAndHandleError(std::bind(&classic_interface::FeedDocument, &ci)); //промотка
+        executeAndHandleError(std::bind(&classic_interface::CutCheck, &ci)); //отрезка
 
         return EXIT_SUCCESS;
     } catch (const exception& e) {
