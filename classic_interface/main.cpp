@@ -33,12 +33,13 @@ static void print2DBarcode(classic_interface* ci)
     ci->Set_BarCode(
         u8"это печать unicode строки в QR коде с выравниванием по разным сторонам чека");
     ci->Set_BlockNumber(0);
-    ci->Set_BarcodeType(BC2D_QRCODE);
+    ci->Set_BarcodeType(classic_interface::BC2D_QRCODE);
     ci->Set_BarcodeParameter1(0); //авто версия
     ci->Set_BarcodeParameter3(4); //размер точки
     ci->Set_BarcodeParameter5(3); //уровень коррекции ошибок 0...3=L,M,Q,H
-    for (const auto& alignment :
-        { TBarcodeAlignment::baCenter, TBarcodeAlignment::baLeft, TBarcodeAlignment::baRight }) {
+    for (const auto& alignment : { classic_interface::TBarcodeAlignment::baCenter,
+             classic_interface::TBarcodeAlignment::baLeft,
+             classic_interface::TBarcodeAlignment::baRight }) {
         ci->Set_BarcodeAlignment(alignment);
         executeAndHandleError(std::bind(&classic_interface::LoadAndPrint2DBarcode, std::ref(ci)));
     }
@@ -49,23 +50,64 @@ static void print2DBarcode(classic_interface* ci)
  * держатель паролей, восстанавливает пред. пароль при выходе из области видимости
  */
 class PasswordHolder {
+public:
+    enum PasswordType {
+        PT_User, //пользователь/кассир
+        PT_Admin, //администратор
+        PT_SC //пароль цто
+    };
+
+private:
     classic_interface* m_ci;
     uint32_t m_oldPassword;
+    PasswordType m_passwordType;
+    static uint32_t oldPasswordByType(classic_interface* ci, PasswordType passwordType)
+    {
+        switch (passwordType) {
+        case PasswordHolder::PT_Admin:
+            return ci->Get_SysAdminPassword();
+        case PasswordHolder::PT_SC:
+            return ci->Get_SCPassword();
+        default:
+            return ci->Get_Password();
+        }
+    }
 
 public:
     PasswordHolder(const PasswordHolder&) = delete;
     PasswordHolder(const PasswordHolder&&) = delete;
     PasswordHolder& operator=(const PasswordHolder&) = delete;
     PasswordHolder& operator=(const PasswordHolder&&) = delete;
-    PasswordHolder(classic_interface* ci, uint32_t tempPasword)
+    PasswordHolder(classic_interface* ci, uint32_t tempPasword, PasswordType passwordType = PT_User)
         : m_ci(ci)
-        , m_oldPassword(ci->Get_Password())
+        , m_oldPassword(oldPasswordByType(ci, passwordType))
+        , m_passwordType(passwordType)
     {
-        m_ci->Set_Password(tempPasword);
+        switch (m_passwordType) {
+        case PasswordHolder::PT_User:
+            m_ci->Set_Password(tempPasword);
+            break;
+        case PasswordHolder::PT_Admin:
+            m_ci->Set_SysAdminPassword(tempPasword);
+            break;
+        case PasswordHolder::PT_SC:
+            m_ci->Set_SCPassword(tempPasword);
+            break;
+        }
     }
     ~PasswordHolder()
     {
-        m_ci->Set_Password(m_oldPassword);
+        switch (m_passwordType) {
+        case PasswordHolder::PT_User:
+            m_ci->Set_Password(m_oldPassword);
+            break;
+        case PasswordHolder::PT_Admin:
+            m_ci->Set_SysAdminPassword(m_oldPassword);
+            break;
+        case PasswordHolder::PT_SC:
+            m_ci->Set_SCPassword(m_oldPassword);
+            break;
+        }
     }
 };
 
@@ -75,11 +117,18 @@ static void prepareRecepit(classic_interface* ci)
         std::bind(&classic_interface::GetECRStatus, std::ref(ci))); //получаем статус
     switch (ci->Get_ECRMode()) {
     case 3: {
-        PasswordHolder ph(ci, ci->Get_SysAdminPassword()); // для снятия Z отчета необходимо
-                                                           // воспользоваться паролем администратора
-        executeAndHandleError(std::bind(&classic_interface::PrintReportWithCleaning,
-            ci)); //снимаем Z отчет если смена больше 24 часов
-    } break;
+        {
+            PasswordHolder ph(
+                ci, ci->Get_SysAdminPassword()); // для снятия Z отчета необходимо
+                                                 // воспользоваться паролем администратора
+            executeAndHandleError(std::bind(&classic_interface::PrintReportWithCleaning,
+                ci)); //снимаем Z отчет если смена больше 24 часов
+            executeAndHandleError(std::bind(&classic_interface::WaitForPrinting,
+                std::ref(ci))); //ждём пока отчет распечатается и открываем смену
+        }
+        executeAndHandleError(std::bind(&classic_interface::OpenSession,
+            ci)); //смена закрыта - открываем
+    }; break;
     case 4:
         executeAndHandleError(std::bind(&classic_interface::OpenSession,
             ci)); //если смена закрыта - открываем
@@ -91,6 +140,12 @@ static void prepareRecepit(classic_interface* ci)
     }
     executeAndHandleError(std::bind(&classic_interface::WaitForPrinting, std::ref(ci)));
 }
+static void exchangeBytes(classic_interface* ci)
+{
+    ci->Set_BinaryConversion(classic_interface::TBinaryConversion::BINARY_CONVERSION_HEX);
+    ci->Set_TransferBytes("FC");
+    executeAndHandleError(std::bind(&classic_interface::ExchangeBytes, ci));
+}
 
 static void print1Dbarcode(classic_interface* ci, const std::string& codeData)
 {
@@ -99,12 +154,16 @@ static void print1Dbarcode(classic_interface* ci, const std::string& codeData)
     ci->Set_BarWidth(2); //ширина вертикальной линии ШК
     executeAndHandleError(std::bind(&classic_interface::WaitForPrinting, std::ref(ci)));
 
-    for (const auto& codeType : { BC1D_Code128A, BC1D_Code39, BC1D_EAN13 }) {
+    for (const auto& codeType : { classic_interface::BC1D_Code128A, classic_interface::BC1D_Code39,
+             classic_interface::BC1D_EAN13 }) {
         ci->Set_BarcodeType(codeType); //тип
-        for (const auto& alignment : { TBarcodeAlignment::baCenter, TBarcodeAlignment::baLeft,
-                 TBarcodeAlignment::baRight }) {
+        for (const auto& alignment : { classic_interface::TBarcodeAlignment::baCenter,
+                 classic_interface::TBarcodeAlignment::baLeft,
+                 classic_interface::TBarcodeAlignment::baRight }) {
             ci->Set_BarcodeAlignment(alignment); //выравнивание
-            for (const auto& text_alignment : { BCT_None, BCT_Above, BCT_Below, BCT_Both }) {
+            for (const auto& text_alignment :
+                { classic_interface::BCT_None, classic_interface::BCT_Above,
+                    classic_interface::BCT_Below, classic_interface::BCT_Both }) {
                 ci->Set_PrintBarcodeText(text_alignment); //печать текста ШК
                 executeAndHandleError(
                     std::bind(&classic_interface::PrintBarcodeLine, std::ref(ci)));
@@ -142,15 +201,44 @@ static void cashierReceipt(classic_interface* ci, bool cancel = false)
     executeAndHandleError(std::bind(&classic_interface::CloseCheck, std::ref(ci)));
     executeAndHandleError(std::bind(&classic_interface::WaitForPrinting, std::ref(ci)));
 }
+
 static void adminCancelReceipt(classic_interface* ci)
 {
     cashierReceipt(ci, true);
 }
 
+/**
+ * @brief writeServiceTable пример записи служебной таблицы с паролем ЦТО
+ */
+static void writeServiceTable(classic_interface* ci)
+{
+    auto valueToWrite = 30;
+    {
+        ci->Set_TableNumber(10);
+        ci->Set_RowNumber(1);
+        ci->Set_FieldNumber(10);
+        executeAndHandleError(std::bind(&classic_interface::ReadTable, std::ref(ci)));
+        //получили, закешировали структуру поля из служебной таблицы. Можно поменять пароль
+        //администратора и изменить содержимое через WriteTable
+        ci->Set_ValueOfFieldInteger(valueToWrite);
+        {
+            PasswordHolder ph(ci, ci->Get_SCPassword(), PasswordHolder::PT_Admin);
+            executeAndHandleError(std::bind(&classic_interface::WriteTable, std::ref(ci)));
+        }
+    }
+}
+
 int main(int argc, char* argv[])
 {
     try {
+        classic_interface::setLogCallback([](const std::string& logmsg) { std::cerr << logmsg; });
         classic_interface ci;
+
+        //        ci.setPropertyChangedCallback([](const std::string& property) {
+        //            std::cout << "property modified: " << property << std::endl;
+        //        });
+        ci.Set_SCPassword(0); //Пароль ЦТО, нужен для установки нового пароля ЦТО + можно позже
+                              //воспользоваться для записи служебных таблиц(им необходим пароль ЦТО)
         ci.Set_SysAdminPassword(30); //Пароль сист. администратора
         ci.Set_Password(1); //Пароль кассира(может совпадать с паролем администратора)
         ci.Set_AutoEoD(true); //Включаем обмен с ОФД средствами драйвера
@@ -162,6 +250,8 @@ int main(int argc, char* argv[])
                 "tcp://192.168.137.111:7778?timeout=3000&bytetimeout=1500&protocol=v1");
         }
         checkResult(ci.Connect()); //соединяемся
+        writeServiceTable(&ci);
+        exchangeBytes(&ci);
         cashierReceipt(&ci); //чек от кассира 1
         adminCancelReceipt(&ci); //открываем чек от имени кассира 1, отмена от администратора
         ci.Set_Password(2);
