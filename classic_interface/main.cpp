@@ -212,6 +212,7 @@ static void adminCancelReceipt(classic_interface* ci)
  */
 static void writeServiceTable(classic_interface* ci)
 {
+    prepareRecepit(ci);
     auto valueToWrite = 30;
     {
         ci->Set_TableNumber(10);
