@@ -2,6 +2,7 @@ package ru.shtrih_m.classic_fr_drv_ng_android_example;
 
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -11,11 +12,12 @@ import android.widget.Spinner;
 
 import libcore.io.Libcore;
 import ru.shtrih_m.fr_drv_ng.android_util.UsbCdcAcmHelper;
-import ru.shtrih_m.fr_drv_ng.classic_interface.Classic;
-import ru.shtrih_m.fr_drv_ng.classic_interface.ClassicImpl;
+import ru.shtrih_m.fr_drv_ng.classic_interface.classic_interface;
+
 
 
 public class MainActivity extends AppCompatActivity {
+
     EditText m_editURL;
     EditText m_editError;
     Button m_btnGo;
@@ -29,7 +31,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     void exampleReceipt() {
-        final Classic ci = new ClassicImpl();
+// т.к. интерфейс единый, а java - это только обёртка вокруг c++ класса
+// стоит так же смотреть пример c++. В основном модифицироваться будет он.
+// https://git.shtrih-m.ru/fr_drv_ng/examples/blob/master/classic_interface/main.cpp
+        final classic_interface ci = new classic_interface();
         try {
             ci.Set_Password(30);
             ci.Set_ConnectionURI(m_editURL.getText().toString());
@@ -61,6 +66,7 @@ public class MainActivity extends AppCompatActivity {
             ci.Set_StringForPrinting("строчка");
             checkResult(ci.CloseCheck());
             checkResult(ci.Disconnect());
+            m_editError.setText(String.format("%d: %s", ci.Get_ResultCode(), ci.Get_ResultCodeDescription()));
 // Необходимо вручную отсоединяться от classic или форсить GC как в обработчике кнопки ниже.
 // Иначе до вызова GC будет висеть соединение, а КЯ работает только с 1 соединением
 //                    ci.Disconnect();
@@ -68,7 +74,6 @@ public class MainActivity extends AppCompatActivity {
             m_editError.setText(String.format("%d: %s", ci.Get_ResultCode(), ci.Get_ResultCodeDescription()));
             ci.Disconnect();
             System.err.println("error:" + e.getLocalizedMessage());
-
         }
     }
 
