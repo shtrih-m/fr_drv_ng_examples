@@ -238,6 +238,7 @@ static void cashierReceipt(classic_interface* ci, bool cancel = false)
 
 /**
  * @brief fsOperationReceipt продвинутыми командами ФН
+ * Передача КТН (тег 1162 для табачной продукции)
  * @param ci
  */
 static void fsOperationReceipt(classic_interface* ci)
@@ -268,7 +269,34 @@ static void fsOperationReceipt(classic_interface* ci)
     ci->Set_PaymentItemSign(1); //товар
     ci->Set_StringForPrinting(u8"Товар");
     executeAndHandleError(std::bind(&classic_interface::FNOperation, std::ref(ci)));
-    ci->Set_Summ1(17761); // Наличные
+    ci->Set_CheckType(1); //приход
+    ci->Set_Quantity(1);
+    ci->Set_Price(5000);
+    ci->Set_Summ1Enabled(true); //рассчитываем сами
+    ci->Set_Summ1(5000);
+    ci->Set_TaxValueEnabled(false);
+    ci->Set_Tax1(1); //НДС 18%
+    ci->Set_Department(1);
+    ci->Set_PaymentTypeSign(4); //полный рассчет
+    ci->Set_PaymentItemSign(1); //товар
+    ci->Set_StringForPrinting(u8"Сигареты Прима");
+
+    ci->Set_MarkingType(5); //Табачные изделия
+    ci->Set_GTIN("12345678901234"); // 14-ти значное число
+    ci->Set_SerialNumber("987654321001234567890123");
+    ci->Set_ModelParamNumber(classic_interface::DPE_f23_cashcore);
+    checkResult(ci->ReadModelParamValue());
+    auto isCashcore = ci->Get_ModelParamValue();
+    if (isCashcore) {
+        //посылать тег, привязанный к операции на cashcore(Кассовое Ядро) нужно ДО операции
+        executeAndHandleError(std::bind(&classic_interface::FNSendItemCodeData, std::ref(ci)));
+    }
+    executeAndHandleError(std::bind(&classic_interface::FNOperation, std::ref(ci)));
+    if (!isCashcore) {
+        //иначе ПОСЛЕ
+        executeAndHandleError(std::bind(&classic_interface::FNSendItemCodeData, std::ref(ci)));
+    }
+    ci->Set_Summ1(17761 + 5000); // Наличные
     ci->Set_Summ2(static_cast<int64_t>(12300 * 1.009456)); //Электронными
     ci->Set_Summ3(0);
     ci->Set_Summ4(0);
@@ -323,6 +351,40 @@ static void writeServiceTable(classic_interface* ci)
     }
 }
 
+static void printBasicLines(classic_interface* ci)
+{
+    prepareRecepit(ci);
+
+    ci->Set_UseReceiptRibbon(true); //чековая лента
+    ci->Set_StringForPrinting("строчка");
+    executeAndHandleError(std::bind(&classic_interface::PrintString, std::ref(ci)));
+    ci->Set_StringForPrinting(u8"Мой дядя самых честных правил,\n"
+                              "Когда не в шутку занемог,\n"
+                              "Он уважать себя заставил\n"
+                              "И лучше выдумать не мог.\n"
+                              "Его пример другим наука;\n"
+                              "Но, боже мой, какая скука\n"
+                              "С больным сидеть и день и ночь,\n"
+                              "Не отходя ни шагу прочь!\n"
+                              "Какое низкое коварство\n"
+                              "Полуживого забавлять,\n"
+                              "Ему подушки поправлять,\n"
+                              "Печально подносить лекарство,\n"
+                              "Вздыхать и думать про себя:\n"
+                              "Когда же черт возьмет тебя!\n");
+    ci->Set_CarryStrings(true);
+    executeAndHandleError(std::bind(&classic_interface::PrintString, std::ref(ci)));
+    ci->Set_FontType(1);
+    {
+        PasswordHolder ph(ci, ci->Get_SysAdminPassword());
+        executeAndHandleError(std::bind(&classic_interface::GetFontMetrics, std::ref(ci)));
+    }
+    for (auto i = 1; i <= ci->Get_FontCount(); i++) {
+        ci->Set_FontType(i);
+        executeAndHandleError(std::bind(&classic_interface::PrintStringWithFont, std::ref(ci)));
+    }
+}
+
 int main(int argc, char* argv[])
 {
     try {
@@ -336,7 +398,7 @@ int main(int argc, char* argv[])
                               //воспользоваться для записи служебных таблиц(им необходим пароль ЦТО)
         ci.Set_SysAdminPassword(30); //Пароль сист. администратора
         ci.Set_Password(1); //Пароль кассира(может совпадать с паролем администратора)
-        ci.Set_AutoEoD(true); //Включаем обмен с ОФД средствами драйвера
+        //        ci.Set_AutoEoD(true); //Включаем обмен с ОФД средствами драйвера
         if (argc > 1) {
             //можно передать URI в качестве аргумента
             ci.Set_ConnectionURI(argv[1]);
@@ -345,8 +407,13 @@ int main(int argc, char* argv[])
                 "tcp://192.168.137.111:7778?timeout=3000&bytetimeout=1500&protocol=v1");
         }
         checkResult(ci.Connect()); //соединяемся
+        ci.Set_TableNumber(1);
+        ci.Set_RowNumber(1);
+        ci.Set_FieldNumber(1);
+        ci.ReadTable();
+        printBasicLines(&ci);
         fsOperationReceipt(&ci);
-        writeServiceTable(&ci); // пример записи сервисной таблицы
+        //        writeServiceTable(&ci); // пример записи сервисной таблицы
         exchangeBytes(&ci); //посылка произвольных данных
         cashierReceipt(&ci); //чек от кассира 1
         adminCancelReceipt(&ci); //открываем чек от имени кассира 1, отмена от администратора
