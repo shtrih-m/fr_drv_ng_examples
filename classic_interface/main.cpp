@@ -53,7 +53,7 @@ static void print2DBarcode(classic_interface* ci)
              classic_interface::TBarcodeAlignment::baLeft,
              classic_interface::TBarcodeAlignment::baRight }) {
         ci->Set_BarcodeAlignment(alignment);
-        executeAndHandleError(std::bind(&classic_interface::LoadAndPrint2DBarcode, std::ref(ci)));
+        executeAndHandleError(std::bind(&classic_interface::LoadAndPrint2DBarcode, ci));
     }
 }
 
@@ -125,9 +125,8 @@ public:
 
 static void prepareRecepit(classic_interface* ci)
 {
-    executeAndHandleError(std::bind(&classic_interface::WaitForPrinting, std::ref(ci)));
-    executeAndHandleError(
-        std::bind(&classic_interface::GetECRStatus, std::ref(ci))); //получаем статус
+    executeAndHandleError(std::bind(&classic_interface::WaitForPrinting, ci));
+    executeAndHandleError(std::bind(&classic_interface::GetECRStatus, ci)); //получаем статус
     switch (ci->Get_ECRMode()) {
     case 3: {
         {
@@ -137,7 +136,7 @@ static void prepareRecepit(classic_interface* ci)
             executeAndHandleError(std::bind(&classic_interface::PrintReportWithCleaning,
                 ci)); //снимаем Z отчет если смена больше 24 часов
             executeAndHandleError(std::bind(&classic_interface::WaitForPrinting,
-                std::ref(ci))); //ждём пока отчет распечатается и открываем смену
+                ci)); //ждём пока отчет распечатается и открываем смену
         }
         executeAndHandleError(std::bind(&classic_interface::OpenSession,
             ci)); //смена закрыта - открываем
@@ -151,7 +150,7 @@ static void prepareRecepit(classic_interface* ci)
             ci)); // отменяем документ если открыт
         break;
     }
-    executeAndHandleError(std::bind(&classic_interface::WaitForPrinting, std::ref(ci)));
+    executeAndHandleError(std::bind(&classic_interface::WaitForPrinting, ci));
 }
 static void exchangeBytes(classic_interface* ci)
 {
@@ -168,9 +167,9 @@ static void exchangeBytes(classic_interface* ci)
 static void print1Dbarcode(classic_interface* ci, const std::string& codeData)
 {
     ci->Set_BarCode(codeData);
-    ci->Set_LineNumber(10); //высота ШК в линиях
+    ci->Set_LineNumber(50); //высота ШК в линиях
     ci->Set_BarWidth(2); //ширина вертикальной линии ШК
-    executeAndHandleError(std::bind(&classic_interface::WaitForPrinting, std::ref(ci)));
+    executeAndHandleError(std::bind(&classic_interface::WaitForPrinting, ci));
 
     for (const auto& codeType : { classic_interface::BC1D_Code128A, classic_interface::BC1D_Code39,
              classic_interface::BC1D_EAN13 }) {
@@ -183,9 +182,8 @@ static void print1Dbarcode(classic_interface* ci, const std::string& codeData)
                 { classic_interface::BCT_None, classic_interface::BCT_Above,
                     classic_interface::BCT_Below, classic_interface::BCT_Both }) {
                 ci->Set_PrintBarcodeText(text_alignment); //печать текста ШК
-                executeAndHandleError(
-                    std::bind(&classic_interface::PrintBarcodeLine, std::ref(ci)));
-                executeAndHandleError(std::bind(&classic_interface::WaitForPrinting, std::ref(ci)));
+                executeAndHandleError(std::bind(&classic_interface::PrintBarcodeLine, ci));
+                executeAndHandleError(std::bind(&classic_interface::WaitForPrinting, ci));
             }
         }
     }
@@ -201,7 +199,7 @@ static void cashierReceipt(classic_interface* ci, bool cancel = false)
     prepareRecepit(ci);
     ci->Set_CheckType(0); //продажа
     executeAndHandleError(
-        std::bind(&classic_interface::OpenCheck, std::ref(ci))); //открываем чек с паролем кассира
+        std::bind(&classic_interface::OpenCheck, ci)); //открываем чек с паролем кассира
     ci->Set_Quantity(1.0);
     ci->Set_Department(0);
     ci->Set_Price(10000);
@@ -210,9 +208,9 @@ static void cashierReceipt(classic_interface* ci, bool cancel = false)
     ci->Set_Tax3(0);
     ci->Set_Tax4(0);
     ci->Set_StringForPrinting(u8"Молоко");
-    executeAndHandleError(std::bind(&classic_interface::Sale, std::ref(ci)));
+    executeAndHandleError(std::bind(&classic_interface::Sale, ci));
     if (cancel) {
-        executeAndHandleError(std::bind(&classic_interface::SysAdminCancelCheck, std::ref(ci)));
+        executeAndHandleError(std::bind(&classic_interface::SysAdminCancelCheck, ci));
         return;
     }
     ci->Set_Summ1(100000);
@@ -232,8 +230,8 @@ static void cashierReceipt(classic_interface* ci, bool cancel = false)
     ci->Set_Summ15(0);
     ci->Set_Summ16(0);
     ci->Set_StringForPrinting(u8"строчка");
-    executeAndHandleError(std::bind(&classic_interface::CloseCheck, std::ref(ci)));
-    executeAndHandleError(std::bind(&classic_interface::WaitForPrinting, std::ref(ci)));
+    executeAndHandleError(std::bind(&classic_interface::CloseCheck, ci));
+    executeAndHandleError(std::bind(&classic_interface::WaitForPrinting, ci));
 }
 
 /**
@@ -245,7 +243,7 @@ static void fsOperationReceipt(classic_interface* ci)
 {
     prepareRecepit(ci);
     ci->Set_CheckType(0); //продажа
-    executeAndHandleError(std::bind(&classic_interface::OpenCheck, std::ref(ci)));
+    executeAndHandleError(std::bind(&classic_interface::OpenCheck, ci));
     ci->Set_CheckType(1); //приход
     ci->Set_Quantity(1.009456);
     ci->Set_Price(12300);
@@ -256,7 +254,7 @@ static void fsOperationReceipt(classic_interface* ci)
     ci->Set_PaymentTypeSign(4); //полный рассчет
     ci->Set_PaymentItemSign(1); //товар
     ci->Set_StringForPrinting(u8"Традиционное молоко");
-    executeAndHandleError(std::bind(&classic_interface::FNOperation, std::ref(ci)));
+    executeAndHandleError(std::bind(&classic_interface::FNOperation, ci));
     ci->Set_CheckType(1); //приход
     ci->Set_Quantity(4);
     ci->Set_Price(4440);
@@ -268,7 +266,7 @@ static void fsOperationReceipt(classic_interface* ci)
     ci->Set_PaymentTypeSign(4); //полный рассчет
     ci->Set_PaymentItemSign(1); //товар
     ci->Set_StringForPrinting(u8"Товар");
-    executeAndHandleError(std::bind(&classic_interface::FNOperation, std::ref(ci)));
+    executeAndHandleError(std::bind(&classic_interface::FNOperation, ci));
     ci->Set_CheckType(1); //приход
     ci->Set_Quantity(1);
     ci->Set_Price(5000);
@@ -289,12 +287,12 @@ static void fsOperationReceipt(classic_interface* ci)
     auto isCashcore = ci->Get_ModelParamValue();
     if (isCashcore) {
         //посылать тег, привязанный к операции на cashcore(Кассовое Ядро) нужно ДО операции
-        executeAndHandleError(std::bind(&classic_interface::FNSendItemCodeData, std::ref(ci)));
+        executeAndHandleError(std::bind(&classic_interface::FNSendItemCodeData, ci));
     }
-    executeAndHandleError(std::bind(&classic_interface::FNOperation, std::ref(ci)));
+    executeAndHandleError(std::bind(&classic_interface::FNOperation, ci));
     if (!isCashcore) {
         //иначе ПОСЛЕ
-        executeAndHandleError(std::bind(&classic_interface::FNSendItemCodeData, std::ref(ci)));
+        executeAndHandleError(std::bind(&classic_interface::FNSendItemCodeData, ci));
     }
     ci->Set_Summ1(17761 + 5000); // Наличные
     ci->Set_Summ2(static_cast<int64_t>(12300 * 1.009456)); //Электронными
@@ -321,7 +319,7 @@ static void fsOperationReceipt(classic_interface* ci)
     ci->Set_TaxValue6(0);
     ci->Set_TaxType(1); // Основная система налогообложения
     ci->Set_StringForPrinting("");
-    executeAndHandleError(std::bind(&classic_interface::FNCloseCheckEx, std::ref(ci)));
+    executeAndHandleError(std::bind(&classic_interface::FNCloseCheckEx, ci));
 }
 
 static void adminCancelReceipt(classic_interface* ci)
@@ -340,14 +338,49 @@ static void writeServiceTable(classic_interface* ci)
         ci->Set_TableNumber(10);
         ci->Set_RowNumber(1);
         ci->Set_FieldNumber(10);
-        executeAndHandleError(std::bind(&classic_interface::ReadTable, std::ref(ci)));
+        executeAndHandleError(std::bind(&classic_interface::ReadTable, ci));
         //получили, закешировали структуру поля из служебной таблицы. Можно поменять пароль
         //администратора и изменить содержимое через WriteTable
         ci->Set_ValueOfFieldInteger(valueToWrite);
         {
             PasswordHolder ph(ci, ci->Get_SCPassword(), PasswordHolder::PT_Admin);
-            executeAndHandleError(std::bind(&classic_interface::WriteTable, std::ref(ci)));
+            executeAndHandleError(std::bind(&classic_interface::WriteTable, ci));
         }
+    }
+}
+static void printLineSwaps(classic_interface* ci)
+{
+    prepareRecepit(ci);
+    std::string line{ 1, 2, 4, 8, 16, 32, 64, static_cast<char>(128), 64, 32, 16, 8, 4, 2, 1 };
+    ci->Set_LineData(line);
+    ci->Set_LineNumber(50);
+    for (const auto& swapMode : { classic_interface::SBM_Swap, classic_interface::SBM_NoSwap,
+             classic_interface::SBM_Prop, classic_interface::SBM_Model }) {
+        ci->Set_SwapBytesMode(swapMode);
+        executeAndHandleError(std::bind(&classic_interface::PrintLine, ci));
+        executeAndHandleError(std::bind(&classic_interface::WaitForPrinting, ci));
+    }
+}
+
+static void printBarcodeLineSwaps(classic_interface* ci)
+{
+    prepareRecepit(ci);
+    ci->Set_DelayedPrint(true);
+    for (const auto& swapMode : { classic_interface::SBM_Swap, classic_interface::SBM_NoSwap,
+             classic_interface::SBM_Prop, classic_interface::SBM_Model }) {
+        {
+            std::stringstream ss;
+            ss << "mode: " << swapMode;
+            ci->Set_BarCode(ss.str());
+        }
+        ci->Set_LineNumber(50);
+        ci->Set_SwapBytesMode(swapMode);
+        ci->Set_BarWidth(2);
+        ci->Set_BarcodeType(classic_interface::BC1D_Code128A);
+        ci->Set_BarcodeAlignment(classic_interface::TBarcodeAlignment::baCenter);
+        ci->Set_PrintBarcodeText(classic_interface::BCT_Below);
+        executeAndHandleError(std::bind(&classic_interface::PrintBarcodeLine, ci));
+        executeAndHandleError(std::bind(&classic_interface::WaitForPrinting, ci));
     }
 }
 
@@ -357,7 +390,7 @@ static void printBasicLines(classic_interface* ci)
 
     ci->Set_UseReceiptRibbon(true); //чековая лента
     ci->Set_StringForPrinting("строчка");
-    executeAndHandleError(std::bind(&classic_interface::PrintString, std::ref(ci)));
+    executeAndHandleError(std::bind(&classic_interface::PrintString, ci));
     ci->Set_StringForPrinting(u8"Мой дядя самых честных правил,\n"
                               "Когда не в шутку занемог,\n"
                               "Он уважать себя заставил\n"
@@ -373,15 +406,15 @@ static void printBasicLines(classic_interface* ci)
                               "Вздыхать и думать про себя:\n"
                               "Когда же черт возьмет тебя!\n");
     ci->Set_CarryStrings(true);
-    executeAndHandleError(std::bind(&classic_interface::PrintString, std::ref(ci)));
+    executeAndHandleError(std::bind(&classic_interface::PrintString, ci));
     ci->Set_FontType(1);
     {
         PasswordHolder ph(ci, ci->Get_SysAdminPassword());
-        executeAndHandleError(std::bind(&classic_interface::GetFontMetrics, std::ref(ci)));
+        executeAndHandleError(std::bind(&classic_interface::GetFontMetrics, ci));
     }
     for (auto i = 1; i <= ci->Get_FontCount(); i++) {
         ci->Set_FontType(i);
-        executeAndHandleError(std::bind(&classic_interface::PrintStringWithFont, std::ref(ci)));
+        executeAndHandleError(std::bind(&classic_interface::PrintStringWithFont, ci));
     }
 }
 
@@ -407,10 +440,8 @@ int main(int argc, char* argv[])
                 "tcp://192.168.137.111:7778?timeout=3000&bytetimeout=1500&protocol=v1");
         }
         checkResult(ci.Connect()); //соединяемся
-        ci.Set_TableNumber(1);
-        ci.Set_RowNumber(1);
-        ci.Set_FieldNumber(1);
-        ci.ReadTable();
+        printLineSwaps(&ci);
+        printBarcodeLineSwaps(&ci);
         printBasicLines(&ci);
         fsOperationReceipt(&ci);
         //        writeServiceTable(&ci); // пример записи сервисной таблицы
@@ -424,8 +455,8 @@ int main(int argc, char* argv[])
         ci.Set_StringQuantity(10); //кол-во строк промотки
         ci.Set_UseReceiptRibbon(true); //использовать чековую лента
         ci.Set_CutType(false); //полная отрезка
-        executeAndHandleError(std::bind(&classic_interface::FeedDocument, std::ref(ci))); //промотка
-        executeAndHandleError(std::bind(&classic_interface::CutCheck, std::ref(ci))); //отрезка
+        executeAndHandleError(std::bind(&classic_interface::FeedDocument, &ci)); //промотка
+        executeAndHandleError(std::bind(&classic_interface::CutCheck, &ci)); //отрезка
 
         return EXIT_SUCCESS;
     } catch (const std::exception& e) {
