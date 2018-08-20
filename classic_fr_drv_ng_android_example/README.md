@@ -1,10 +1,8 @@
-минимальный android пример работы с java оберткой классического интерфейса.
-Для работы необходимо положить в `jniLibs` актуальные версии `libcppbase_fr_drv_ng.so` и `libclassic_fr_drv_ng.so` так же необходима библиотека `libgnustl_shared.so` из состава NDK  
-
+Минимальный android пример работы с java оберткой классического интерфейса.
 NDK android переходит с gnu на llvm тулчейн. В будущем драйвер будет собираться с llvm и работать под libc++ STL.
+В данный момент сборки формируются для обоих тулчейнов старый(GNU/gcc) и текущий (LLVM/clang).
 
-**ВНИМАНИЕ** в данный момент(06.18) остается нерешенным вопрос с динамической линковкой под gnustl_shared в актуальном android NDK, поэтому `libclassic_fr_drv_ng.so` линкуется с `libcppbase_fr_drv_ng` статически. Соответственно в `jniLibs` достаточно добавить только `libclassic_fr_drv_ng.so` и `libgnustl_shared.so`
-
+Для работы примера необходимо положить в `jniLibs` файлы библиотек `libcppbase_fr_drv_ng.so` и `libclassic_fr_drv_ng.so` из архива сборки и stl из состава NDK в зависимости тулчейна `libgnustl_shared.so` для GNU и `libc++_shared.so` для LLVM.  
 
 ```java
 //Необходимо вручную отсоединяться от classic 
