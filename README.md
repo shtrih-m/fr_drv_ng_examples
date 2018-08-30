@@ -16,7 +16,7 @@ cmake --build .
 ```bash
 gradlew build
 ```
-Для запуска необходимы java библиотека **classic_java_fr_drv_ng-1.1.jar** и нативные библиотеки: **libcppbase_fr_drv_ng.so**, **libclassic_fr_drv_ng.so** (или dll для Windows)  
+Для запуска необходимы java библиотека **classic_java_fr_drv_ng-$VERSION.jar** и нативные библиотеки: **libcppbase_fr_drv_ng.so**, **libclassic_fr_drv_ng.so** (или dll для Windows)  
 Запуск:  
 В java.library.path необходимо добавить нативные библиотеки, в classpath java.  
 Пример:  
