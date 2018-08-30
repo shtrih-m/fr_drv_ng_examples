@@ -14,5 +14,5 @@ repositories {
 
 dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.12'
-    compile files('lib/classic_java_fr_drv_ng-1.4.0.jar')
+    compile files('lib/classic_java_fr_drv_ng-1.4.1.jar')
 }
