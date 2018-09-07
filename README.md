@@ -1,7 +1,7 @@
 # Примеры использования кросс-платформенного драйвера
 
 ## Общие
-Из CI [основного](https://git.shtrih-m.ru/fr_drv_ng/fr_drv_ng/pipelines) репозитория необходимо взять последнюю версию библиотек/java/заголовочных файлов для вашей архитектуры/ОС.
+Из [релизов github репозитория](https://github.com/shtrih-m/fr_drv_ng/releases) или [внутреннего gitlab](https://git.shtrih-m.ru/fr_drv_ng/fr_drv_ng/pipelines) необходимо взять последнюю версию библиотек/java/заголовочных файлов для вашей архитектуры/ОС.
 ### classic_interface
 Это пример использования "классического" интерфейса драйвера "как в Драйвер ФР под Windows"  
 Для сборки необходимо скопировать заголовочный файл **classic_interface.h** и библиотеки: **libcppbase_fr_drv_ng.so**, **libclassic_fr_drv_ng.so** (или dll для Windows)  
