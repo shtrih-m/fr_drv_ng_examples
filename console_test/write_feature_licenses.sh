@@ -39,7 +39,7 @@ else
   echo "Невозможно получить статус ККТ"
   exit ${BAD_STATE}
 fi
-SERIAL_NUMBER=$(grep  'Serial number' <<< ${STATUS} |cut -f2)
+SERIAL_NUMBER=$(${EXE} read 18.1.1)
 echo "Серийный номер: "${SERIAL_NUMBER}
 while IFS='' read -r line || [[ -n "$line" ]]; do
     SERIAL_FROM_FILE=$(echo "${line}"| cut -f1 )

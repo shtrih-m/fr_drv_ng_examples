@@ -41,7 +41,7 @@ else
   echo "Невозможно получить статус ККТ"
   exit $BAD_STATE
 fi
-SERIAL_NUMBER=$(grep  'Serial number' <<< $STATUS |cut -f2)
+SERIAL_NUMBER=$($EXE read 18.1.1)
 BUILD_DATE=$(grep  'Firmware date' <<< $STATUS |cut -f2)
 echo "Заводской номер: $SERIAL_NUMBER, Дата ПО: $BUILD_DATE"
 API_ANSWER=$(curl -s -H "Content-Type: application/json" -X POST -d "{\"build_date\":\"$BUILD_DATE\"}" $FR_UPDATE_SERVER_URL)
