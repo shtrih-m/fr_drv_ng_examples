@@ -64,7 +64,7 @@ if [ $CRITICAL == "true" ]
 then
 echo "ВНИМАНИЕ: доступно критическое обновление"
 fi
-UIN=$($EXE read 23.11.1)
+UIN=$($EXE read 23.1.11)
 
 if [ $UIN == "---" ]
 then
@@ -130,7 +130,7 @@ else
   echo "Невозможно получить статус ККТ"
   exit $BAD_STATE
 fi
-SERIAL_NUMBER_DISCOVERED=$(grep  'Serial number' <<< $STATUS |cut -f2)
+SERIAL_NUMBER_DISCOVERED=$($EXE read 18.1.1)
 if [ $SERIAL_NUMBER == $SERIAL_NUMBER_DISCOVERED ]
 then
   echo "Обнаружено устройство $SERIAL_NUMBER_DISCOVERED"
