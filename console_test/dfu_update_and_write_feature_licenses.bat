@@ -73,20 +73,35 @@ echo|set /p= Ищем обновленный ККТ в сети и на COM портах...
 console_test_fr_drv_ng discover > tmp
 for /f %%i in ("tmp") do set TMP_SIZE=%%~zi
 if %TMP_SIZE% EQU 0 "echo Не удалось обнаружить устройство после обновления" && EXIT /B 1
-set /P FR_DRV_NG_CT_URL=<tmp
+
+for /F "usebackq tokens=*" %%A in ("tmp") do (
+set "FR_DRV_NG_CT_URL=%%A"
+call :nextkkt
+)
+goto continue
+:nextkkt
+echo "Попытка соединения %FR_DRV_NG_CT_URL%"
 console_test_fr_drv_ng model>NUL
-IF %ERRORLEVEL% NEQ 0 EXIT /B %ERRORLEVEL%
+IF %ERRORLEVEL% NEQ 0 GOTO:EOF
 echo Устройство обнаружено!
 
 echo|set /p= Выполняем техобнуление...
 console_test_fr_drv_ng tech-reset
-IF %ERRORLEVEL% NEQ 0 EXIT /B %ERRORLEVEL%
+IF %ERRORLEVEL% NEQ 0 GOTO:EOF
 echo готово
 
 echo|set /p= Устанавливаем текущую дату-время...
 console_test_fr_drv_ng setcurrentdatetime
-IF %ERRORLEVEL% NEQ 0 EXIT /B %ERRORLEVEL%
+IF %ERRORLEVEL% NEQ 0 GOTO:EOF
 echo готово
+
+echo Получаем заводской номер обнаруженного устройства...
+console_test_fr_drv_ng read 18.1.1>tmp
+IF %ERRORLEVEL% NEQ 0 GOTO:EOF
+set /P NEW_SERIAL=<tmp
+echo %SERIAL%
+echo %NEW_SERIAL%
+if not "%SERIAL%" == "%NEW_SERIAL%" "echo Заводской номер не совпадает с ожидаемым" && goto :EOF
 
 findstr /B %SERIAL% licenses.txt > tmp
 for /f %%i in ("tmp") do set TMP_SIZE=%%~zi
@@ -102,17 +117,20 @@ for /F "tokens=1,2,3" %%A in ("%LICENSE_STRING%") DO (
 )
 echo|set /p= Устанавливаем функциональные лицензии...
 console_test_fr_drv_ng write-feature-licenses %LICENSE% %CRYPTO_SIGNATURE%
-IF %ERRORLEVEL% NEQ 0 EXIT /B %ERRORLEVEL%
+IF %ERRORLEVEL% NEQ 0 GOTO:EOF
 echo готово
 
 echo|set /p= Восстанавливаем таблицы...
 console_test_fr_drv_ng restore-tables<%SAVE_TABLES_PATH%
-IF %ERRORLEVEL% NEQ 0 EXIT /B %ERRORLEVEL%
+IF %ERRORLEVEL% NEQ 0 GOTO:EOF
 echo готово
 
 echo|set /p= Перезагружаемся...
 console_test_fr_drv_ng reboot
-IF %ERRORLEVEL% NEQ 0 EXIT /B %ERRORLEVEL%
+IF %ERRORLEVEL% NEQ 0 GOTO:EOF
 echo готово
 del /f tmp
 exit /B 0
+:continue
+del /f tmp
+exit /B 1
