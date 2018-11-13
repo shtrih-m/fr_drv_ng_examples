@@ -123,7 +123,7 @@ for /F "tokens=1,2,3" %%A in ("%LICENSE_STRING%") DO (
 )
 echo|set /p= Устанавливаем функциональные лицензии...
 console_test_fr_drv_ng write-feature-licenses %LICENSE% %CRYPTO_SIGNATURE%
-IF %ERRORLEVEL% NEQ 0 && echo "Перезагружаемся..." && console_test_fr_drv_ng reboot & exit /B 1
+IF %ERRORLEVEL% NEQ 0 echo "Перезагружаемся..." && console_test_fr_drv_ng reboot & exit /B 1
 echo готово
 
 echo|set /p= Перезагружаемся...
