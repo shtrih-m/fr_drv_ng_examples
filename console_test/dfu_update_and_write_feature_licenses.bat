@@ -108,7 +108,7 @@ type %SAVE_TABLES_PATH% | console_test_fr_drv_ng restore-tables
 IF %ERRORLEVEL% NEQ 0 GOTO:EOF
 echo готово
 
-if not exist licenses.slf echo "файл лицензий licenses.slf не найден" && goto :EOF
+if not exist licenses.slf echo "файл лицензий licenses.slf не найден" && echo "Перезагружаемся..." && console_test_fr_drv_ng reboot & exit /B 1
 findstr /B %SERIAL% licenses.slf > tmp
 for /f %%i in ("tmp") do set TMP_SIZE=%%~zi
 if %TMP_SIZE% EQU 0 "echo Лицензия для не обнаружена" && EXIT /B 1
