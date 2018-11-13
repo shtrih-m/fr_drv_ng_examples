@@ -4,7 +4,7 @@ rem Пример скрипта обновления ФР по DFU и записью функциональных лицензий
 rem В пути к рабочей директории не должно быть пробелов и других спец символов.
 rem Например, можно положить скрипт в C:\shtrih_dfu_update
 rem Директория должна быть доступна на запись(будут сохраняться временные файлы)
-rem рядом со скриптом необходимо положить dfu-util.exe и console_test_fr_drv_ng.exe, и файл с функциональными лицензиями под именем licenses.txt
+rem рядом со скриптом необходимо положить dfu-util.exe и console_test_fr_drv_ng.exe, и файл с функциональными лицензиями под именем licenses.slf
 
 echo Начинаем...
 rem если раскомментировать следующую строку - отладка будет в консоли, иначе в файле fr_drv.log в рабочей директории
@@ -61,8 +61,8 @@ dfu-util -D %FIRMWARE_FILENAME%
 IF %ERRORLEVEL% NEQ 0 EXIT /B %ERRORLEVEL%
 echo готово
 
-rem спим 5 секунд, ждём появления устройства в системе после обновления
-timeout /t 5 /nobreak > NUL
+rem спим 15 секунд, ждём появления устройства в системе после обновления
+timeout /t 15 /nobreak > NUL
 rem удаляем наши правила файерволла, этот шаг нужен потому что при изменении пути к исполняемому файлу перестают работать и правила. Поэтому каждый раз удаляем старые правила и добавляем новые.
 netsh advfirewall firewall del rule name="console_test_fr_drv_ng_allow"
 echo Добавляем правила firewall
@@ -103,7 +103,13 @@ echo %SERIAL%
 echo %NEW_SERIAL%
 if not "%SERIAL%" == "%NEW_SERIAL%" "echo Заводской номер не совпадает с ожидаемым" && goto :EOF
 
-findstr /B %SERIAL% licenses.txt > tmp
+echo|set /p= Восстанавливаем таблицы...
+type %SAVE_TABLES_PATH% | console_test_fr_drv_ng restore-tables
+IF %ERRORLEVEL% NEQ 0 GOTO:EOF
+echo готово
+
+if not exist licenses.slf echo "файл лицензий licenses.slf не найден" && goto :EOF
+findstr /B %SERIAL% licenses.slf > tmp
 for /f %%i in ("tmp") do set TMP_SIZE=%%~zi
 if %TMP_SIZE% EQU 0 "echo Лицензия для не обнаружена" && EXIT /B 1
 set /P LICENSE_STRING=<tmp
@@ -117,11 +123,6 @@ for /F "tokens=1,2,3" %%A in ("%LICENSE_STRING%") DO (
 )
 echo|set /p= Устанавливаем функциональные лицензии...
 console_test_fr_drv_ng write-feature-licenses %LICENSE% %CRYPTO_SIGNATURE%
-IF %ERRORLEVEL% NEQ 0 GOTO:EOF
-echo готово
-
-echo|set /p= Восстанавливаем таблицы...
-console_test_fr_drv_ng restore-tables<%SAVE_TABLES_PATH%
 IF %ERRORLEVEL% NEQ 0 GOTO:EOF
 echo готово
 
