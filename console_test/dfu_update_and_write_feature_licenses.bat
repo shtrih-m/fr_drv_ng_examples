@@ -111,7 +111,7 @@ echo готово
 if not exist licenses.slf echo "файл лицензий licenses.slf не найден" && echo "Перезагружаемся..." && console_test_fr_drv_ng reboot & exit /B 1
 findstr /B %SERIAL% licenses.slf > tmp
 for /f %%i in ("tmp") do set TMP_SIZE=%%~zi
-if %TMP_SIZE% EQU 0 echo "Лицензия для не обнаружена" && EXIT /B 1
+if %TMP_SIZE% EQU 0 echo "Лицензия для не обнаружена" && echo "Перезагружаемся..." && console_test_fr_drv_ng reboot & exit /B 1
 set /P LICENSE_STRING=<tmp
 set LICENSE=
 set CRYPTO_SIGNATURE=
@@ -123,12 +123,12 @@ for /F "tokens=1,2,3" %%A in ("%LICENSE_STRING%") DO (
 )
 echo|set /p= Устанавливаем функциональные лицензии...
 console_test_fr_drv_ng write-feature-licenses %LICENSE% %CRYPTO_SIGNATURE%
-IF %ERRORLEVEL% NEQ 0 GOTO:EOF
+IF %ERRORLEVEL% NEQ 0 && echo "Перезагружаемся..." && console_test_fr_drv_ng reboot & exit /B 1
 echo готово
 
 echo|set /p= Перезагружаемся...
 console_test_fr_drv_ng reboot
-IF %ERRORLEVEL% NEQ 0 GOTO:EOF
+IF %ERRORLEVEL% NEQ 0 exit /b 1
 echo готово
 del /f tmp
 exit /B 0
