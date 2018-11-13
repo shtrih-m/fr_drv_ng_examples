@@ -111,7 +111,7 @@ echo готово
 if not exist licenses.slf echo "файл лицензий licenses.slf не найден" && echo "Перезагружаемся..." && console_test_fr_drv_ng reboot & exit /B 1
 findstr /B %SERIAL% licenses.slf > tmp
 for /f %%i in ("tmp") do set TMP_SIZE=%%~zi
-if %TMP_SIZE% EQU 0 "echo Лицензия для не обнаружена" && EXIT /B 1
+if %TMP_SIZE% EQU 0 echo "Лицензия для не обнаружена" && EXIT /B 1
 set /P LICENSE_STRING=<tmp
 set LICENSE=
 set CRYPTO_SIGNATURE=
