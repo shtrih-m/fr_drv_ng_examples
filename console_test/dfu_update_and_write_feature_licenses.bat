@@ -72,7 +72,7 @@ netsh advfirewall firewall add rule name="console_test_fr_drv_ng_allow" program=
 echo|set /p= Ищем обновленный ККТ в сети и на COM портах...
 console_test_fr_drv_ng discover > tmp
 for /f %%i in ("tmp") do set TMP_SIZE=%%~zi
-if %TMP_SIZE% EQU 0 "echo Не удалось обнаружить устройство после обновления" && EXIT /B 1
+if %TMP_SIZE% EQU 0 echo "Не удалось обнаружить устройство после обновления" && EXIT /B 1
 
 for /F "usebackq tokens=*" %%A in ("tmp") do (
 set "FR_DRV_NG_CT_URL=%%A"
@@ -101,7 +101,7 @@ IF %ERRORLEVEL% NEQ 0 GOTO:EOF
 set /P NEW_SERIAL=<tmp
 echo %SERIAL%
 echo %NEW_SERIAL%
-if not "%SERIAL%" == "%NEW_SERIAL%" "echo Заводской номер не совпадает с ожидаемым" && goto :EOF
+if not "%SERIAL%" == "%NEW_SERIAL%" echo "Заводской номер не совпадает с ожидаемым" && goto :EOF
 
 echo|set /p= Восстанавливаем таблицы...
 type %SAVE_TABLES_PATH% | console_test_fr_drv_ng restore-tables
