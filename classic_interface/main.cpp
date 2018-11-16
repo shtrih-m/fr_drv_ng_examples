@@ -5,6 +5,7 @@
 #include <sstream>
 #include <thread>
 
+namespace classic_fr_drv_ng_util {
 /**
  * @brief checkResult проверяет код ошибки и бросает исключение если таковая
  * @param code
@@ -37,24 +38,15 @@ static void executeAndHandleError(std::function<int()> func)
 }
 
 /**
- * @brief print2DBarcode печать QR кода
- * @param ci
+ * @brief isCashcore получить параметр кассы, реализация - кассовое ядро или аппаратный принтер
+ * @param ci объект ci для которого необходимо выполнить
+ * @return 0
  */
-static void print2DBarcode(classic_interface* ci)
+static int isCashcore(classic_interface* ci)
 {
-    ci->Set_BarCode(
-        u8"это печать unicode строки в QR коде с выравниванием по разным сторонам чека");
-    ci->Set_BlockNumber(0);
-    ci->Set_BarcodeType(classic_interface::BC2D_QRCODE);
-    ci->Set_BarcodeParameter1(0); //авто версия
-    ci->Set_BarcodeParameter3(4); //размер точки
-    ci->Set_BarcodeParameter5(3); //уровень коррекции ошибок 0...3=L,M,Q,H
-    for (const auto& alignment : { classic_interface::TBarcodeAlignment::baCenter,
-             classic_interface::TBarcodeAlignment::baLeft,
-             classic_interface::TBarcodeAlignment::baRight }) {
-        ci->Set_BarcodeAlignment(alignment);
-        executeAndHandleError(std::bind(&classic_interface::LoadAndPrint2DBarcode, ci));
-    }
+    ci->Set_ModelParamNumber(classic_interface::DPE_f23_cashcore);
+    checkResult(ci->ReadModelParamValue());
+    return ci->Get_ModelParamValue();
 }
 
 /**
@@ -123,12 +115,12 @@ public:
     }
 };
 
-static void prepareRecepit(classic_interface* ci)
+static void prepareReceipt(classic_interface* ci)
 {
     executeAndHandleError(std::bind(&classic_interface::WaitForPrinting, ci));
     executeAndHandleError(std::bind(&classic_interface::GetECRStatus, ci)); //получаем статус
     switch (ci->Get_ECRMode()) {
-    case 3: {
+    case classic_interface::PM_SessionOpenOver24h: {
         {
             PasswordHolder ph(
                 ci, ci->Get_SysAdminPassword()); // для снятия Z отчета необходимо
@@ -141,11 +133,11 @@ static void prepareRecepit(classic_interface* ci)
         executeAndHandleError(std::bind(&classic_interface::OpenSession,
             ci)); //смена закрыта - открываем
     }; break;
-    case 4:
+    case classic_interface::PM_SessionClosed:
         executeAndHandleError(std::bind(&classic_interface::OpenSession,
             ci)); //если смена закрыта - открываем
         break;
-    case 8:
+    case classic_interface::PM_OpenedDocument:
         executeAndHandleError(std::bind(&classic_interface::SysAdminCancelCheck,
             ci)); // отменяем документ если открыт
         break;
@@ -157,6 +149,35 @@ static void exchangeBytes(classic_interface* ci)
     ci->Set_BinaryConversion(classic_interface::TBinaryConversion::BINARY_CONVERSION_HEX);
     ci->Set_TransferBytes("FC");
     executeAndHandleError(std::bind(&classic_interface::ExchangeBytes, ci));
+}
+} // namespace classic_fr_drv_ng_util
+
+using classic_fr_drv_ng_util::checkResult;
+using classic_fr_drv_ng_util::exchangeBytes;
+using classic_fr_drv_ng_util::executeAndHandleError;
+using classic_fr_drv_ng_util::isCashcore;
+using classic_fr_drv_ng_util::PasswordHolder;
+using classic_fr_drv_ng_util::prepareReceipt;
+
+/**
+ * @brief print2DBarcode печать QR кода
+ * @param ci
+ */
+static void print2DBarcode(classic_interface* ci)
+{
+    ci->Set_BarCode(
+        u8"это печать unicode строки в QR коде с выравниванием по разным сторонам чека");
+    ci->Set_BlockNumber(0);
+    ci->Set_BarcodeType(classic_interface::BC2D_QRCODE);
+    ci->Set_BarcodeParameter1(0); //авто версия
+    ci->Set_BarcodeParameter3(4); //размер точки
+    ci->Set_BarcodeParameter5(3); //уровень коррекции ошибок 0...3=L,M,Q,H
+    for (const auto& alignment : { classic_interface::TBarcodeAlignment::baCenter,
+             classic_interface::TBarcodeAlignment::baLeft,
+             classic_interface::TBarcodeAlignment::baRight }) {
+        ci->Set_BarcodeAlignment(alignment);
+        executeAndHandleError(std::bind(&classic_interface::LoadAndPrint2DBarcode, ci));
+    }
 }
 
 /**
@@ -196,7 +217,7 @@ static void print1Dbarcode(classic_interface* ci, const std::string& codeData)
  */
 static void cashierReceipt(classic_interface* ci, bool cancel = false)
 {
-    prepareRecepit(ci);
+    prepareReceipt(ci);
     ci->Set_CheckType(0); //продажа
     executeAndHandleError(
         std::bind(&classic_interface::OpenCheck, ci)); //открываем чек с паролем кассира
@@ -233,6 +254,69 @@ static void cashierReceipt(classic_interface* ci, bool cancel = false)
     executeAndHandleError(std::bind(&classic_interface::CloseCheck, ci));
     executeAndHandleError(std::bind(&classic_interface::WaitForPrinting, ci));
 }
+/*!
+ * \brief fsOperationReturnReceipt возврат прихода с применением FNOperation
+ * \param ci
+ */
+static void fsOperationReturnReceipt(classic_interface* ci)
+{
+    struct Item {
+        int64_t price;
+        double quantity;
+        const char* name;
+    };
+    const Item items[] = {
+        { 10000, 1, u8"Хороший товар" },
+        { 4440, 4, u8"Плохой товар" },
+        { 4200, 3, u8"Злой товар" },
+    };
+    int64_t sum = 0;
+    prepareReceipt(ci);
+    ci->Set_CheckType(2); //возврат прихода
+    executeAndHandleError(std::bind(&classic_interface::OpenCheck, ci));
+
+    for (const auto& item : items) {
+        ci->Set_CheckType(2); //возврат прихода
+        ci->Set_Quantity(item.quantity);
+        ci->Set_Price(item.price);
+        sum += ci->Get_Quantity() * ci->Get_Price();
+        ci->Set_Summ1Enabled(false); //рассчитывает касса
+        ci->Set_TaxValueEnabled(false);
+        ci->Set_Tax1(1); //НДС 18%
+        ci->Set_Department(1);
+        ci->Set_PaymentTypeSign(4); //полный рассчет
+        ci->Set_PaymentItemSign(1); //товар
+        ci->Set_StringForPrinting(item.name);
+        executeAndHandleError(std::bind(&classic_interface::FNOperation, ci));
+    }
+    auto electro_sum = sum - 12345; //частичный возврат наличными, частичный электронными
+    ci->Set_Summ1(sum - electro_sum); // Наличные
+    ci->Set_Summ2(electro_sum); //Электронными
+    ci->Set_Summ3(0);
+    ci->Set_Summ4(0);
+    ci->Set_Summ5(0);
+    ci->Set_Summ6(0);
+    ci->Set_Summ7(0);
+    ci->Set_Summ8(0);
+    ci->Set_Summ9(0);
+    ci->Set_Summ10(0);
+    ci->Set_Summ11(0);
+    ci->Set_Summ12(0);
+    ci->Set_Summ13(0);
+    ci->Set_Summ14(0);
+    ci->Set_Summ15(0);
+    ci->Set_Summ16(0);
+    ci->Set_RoundingSumm(99); // Сумма округления
+    ci->Set_TaxValue1(0); // Налоги мы не считаем
+    ci->Set_TaxValue2(0);
+    ci->Set_TaxValue3(0);
+    ci->Set_TaxValue4(0);
+    ci->Set_TaxValue5(0);
+    ci->Set_TaxValue6(0);
+    ci->Set_TaxType(1); // Основная система налогообложения
+    ci->Set_StringForPrinting("");
+    executeAndHandleError(std::bind(&classic_interface::FNCloseCheckEx, ci));
+}
 
 /**
  * @brief fsOperationReceipt продвинутыми командами ФН
@@ -241,61 +325,60 @@ static void cashierReceipt(classic_interface* ci, bool cancel = false)
  */
 static void fsOperationReceipt(classic_interface* ci)
 {
-    prepareRecepit(ci);
+    struct Item {
+        int64_t price;
+        double quantity;
+        int64_t total; // -1 - рассчитывает касса, иначе сами
+        const char* name;
+        bool bGTINexample; // пример товара с маркировкой
+    };
+    const Item items[] = {
+        { 12300, 1.009456, -1, u8"Традиционное молоко", false },
+        { 4440, 4, 17761, u8"Товар", false }, //сумма с *ошибкой* на копейку
+        { 5000, 1, 5000, u8"Сигареты Прима", true },
+    };
+
+    prepareReceipt(ci);
+    int64_t sum = 0;
     ci->Set_CheckType(0); //продажа
     executeAndHandleError(std::bind(&classic_interface::OpenCheck, ci));
-    ci->Set_CheckType(1); //приход
-    ci->Set_Quantity(1.009456);
-    ci->Set_Price(12300);
-    ci->Set_Summ1Enabled(false); //рассчитывает касса
-    ci->Set_TaxValueEnabled(false);
-    ci->Set_Tax1(1); //НДС 18%
-    ci->Set_Department(1);
-    ci->Set_PaymentTypeSign(4); //полный рассчет
-    ci->Set_PaymentItemSign(1); //товар
-    ci->Set_StringForPrinting(u8"Традиционное молоко");
-    executeAndHandleError(std::bind(&classic_interface::FNOperation, ci));
-    ci->Set_CheckType(1); //приход
-    ci->Set_Quantity(4);
-    ci->Set_Price(4440);
-    ci->Set_Summ1Enabled(true); //рассчитываем сами
-    ci->Set_Summ1(17761); //*ошибаемся* на копейку
-    ci->Set_TaxValueEnabled(false);
-    ci->Set_Tax1(1); //НДС 18%
-    ci->Set_Department(1);
-    ci->Set_PaymentTypeSign(4); //полный рассчет
-    ci->Set_PaymentItemSign(1); //товар
-    ci->Set_StringForPrinting(u8"Товар");
-    executeAndHandleError(std::bind(&classic_interface::FNOperation, ci));
-    ci->Set_CheckType(1); //приход
-    ci->Set_Quantity(1);
-    ci->Set_Price(5000);
-    ci->Set_Summ1Enabled(true); //рассчитываем сами
-    ci->Set_Summ1(5000);
-    ci->Set_TaxValueEnabled(false);
-    ci->Set_Tax1(1); //НДС 18%
-    ci->Set_Department(1);
-    ci->Set_PaymentTypeSign(4); //полный рассчет
-    ci->Set_PaymentItemSign(1); //товар
-    ci->Set_StringForPrinting(u8"Сигареты Прима");
 
-    ci->Set_MarkingType(5); //Табачные изделия
-    ci->Set_GTIN("12345678901234"); // 14-ти значное число
-    ci->Set_SerialNumber("987654321001234567890123");
-    ci->Set_ModelParamNumber(classic_interface::DPE_f23_cashcore);
-    checkResult(ci->ReadModelParamValue());
-    auto isCashcore = ci->Get_ModelParamValue();
-    if (isCashcore) {
-        //посылать тег, привязанный к операции на cashcore(Кассовое Ядро) нужно ДО операции
-        executeAndHandleError(std::bind(&classic_interface::FNSendItemCodeData, ci));
+    for (const auto& item : items) {
+        ci->Set_CheckType(1); //приход
+        ci->Set_Quantity(item.quantity);
+        ci->Set_Price(item.price);
+        sum += item.price * item.quantity;
+
+        ci->Set_Summ1Enabled(!(item.total == -1)); //рассчитывает касса
+        ci->Set_Summ1(item.total);
+        ci->Set_TaxValueEnabled(false);
+        ci->Set_Tax1(1); //НДС 18%
+        ci->Set_Department(1);
+        ci->Set_PaymentTypeSign(4); //полный рассчет
+        ci->Set_PaymentItemSign(1); //товар
+        ci->Set_StringForPrinting(item.name);
+        if (item.bGTINexample) {
+            auto cashcore = isCashcore(ci); // узнаем на кассовом ядре мы работаем или нет
+            ci->Set_MarkingType(5); //Табачные изделия
+            ci->Set_GTIN("12345678901234"); // 14-ти значное число
+            ci->Set_SerialNumber("987654321001234567890123");
+            if (cashcore) {
+                //посылать тег, привязанный к операции на cashcore(Кассовое Ядро) нужно ДО операции
+                executeAndHandleError(std::bind(&classic_interface::FNSendItemCodeData, ci));
+            }
+            executeAndHandleError(std::bind(&classic_interface::FNOperation, ci));
+            if (!cashcore) {
+                //иначе ПОСЛЕ
+                executeAndHandleError(std::bind(&classic_interface::FNSendItemCodeData, ci));
+            }
+        } else {
+            executeAndHandleError(std::bind(&classic_interface::FNOperation, ci));
+        }
     }
-    executeAndHandleError(std::bind(&classic_interface::FNOperation, ci));
-    if (!isCashcore) {
-        //иначе ПОСЛЕ
-        executeAndHandleError(std::bind(&classic_interface::FNSendItemCodeData, ci));
-    }
-    ci->Set_Summ1(17761 + 5000); // Наличные
-    ci->Set_Summ2(static_cast<int64_t>(12300 * 1.009456)); //Электронными
+    auto cash_sum = 15000; //частично оплатим начлиными
+    auto electro_sum = sum - cash_sum; //остальное электронными
+    ci->Set_Summ1(cash_sum); // Наличные
+    ci->Set_Summ2(electro_sum); //Электронными
     ci->Set_Summ3(0);
     ci->Set_Summ4(0);
     ci->Set_Summ5(0);
@@ -332,7 +415,7 @@ static void adminCancelReceipt(classic_interface* ci)
  */
 static void writeServiceTable(classic_interface* ci)
 {
-    prepareRecepit(ci);
+    prepareReceipt(ci);
     auto valueToWrite = 30;
     {
         ci->Set_TableNumber(10);
@@ -350,8 +433,8 @@ static void writeServiceTable(classic_interface* ci)
 }
 static void printLineSwaps(classic_interface* ci)
 {
-    prepareRecepit(ci);
-    std::string line{ 1, 2, 4, 8, 16, 32, 64, static_cast<char>(128), 64, 32, 16, 8, 4, 2, 1 };
+    prepareReceipt(ci);
+    std::string line { 1, 2, 4, 8, 16, 32, 64, static_cast<char>(128), 64, 32, 16, 8, 4, 2, 1 };
     ci->Set_LineData(line);
     ci->Set_LineNumber(50);
     for (const auto& swapMode : { classic_interface::SBM_Swap, classic_interface::SBM_NoSwap,
@@ -364,7 +447,7 @@ static void printLineSwaps(classic_interface* ci)
 
 static void printBarcodeLineSwaps(classic_interface* ci)
 {
-    prepareRecepit(ci);
+    prepareReceipt(ci);
     ci->Set_DelayedPrint(true);
     for (const auto& swapMode : { classic_interface::SBM_Swap, classic_interface::SBM_NoSwap,
              classic_interface::SBM_Prop, classic_interface::SBM_Model }) {
@@ -386,7 +469,7 @@ static void printBarcodeLineSwaps(classic_interface* ci)
 
 static void printBasicLines(classic_interface* ci)
 {
-    prepareRecepit(ci);
+    prepareReceipt(ci);
 
     ci->Set_UseReceiptRibbon(true); //чековая лента
     ci->Set_StringForPrinting("строчка");
@@ -440,10 +523,12 @@ int main(int argc, char* argv[])
                 "tcp://192.168.137.111:7778?timeout=3000&bytetimeout=1500&protocol=v1");
         }
         checkResult(ci.Connect()); //соединяемся
+        ci.Set_WaitForPrintingDelay(20); //задержка ожидания окончания печати
         printLineSwaps(&ci);
         printBarcodeLineSwaps(&ci);
         printBasicLines(&ci);
         fsOperationReceipt(&ci);
+        fsOperationReturnReceipt(&ci);
         //        writeServiceTable(&ci); // пример записи сервисной таблицы
         exchangeBytes(&ci); //посылка произвольных данных
         cashierReceipt(&ci); //чек от кассира 1
@@ -457,7 +542,7 @@ int main(int argc, char* argv[])
         ci.Set_CutType(false); //полная отрезка
         executeAndHandleError(std::bind(&classic_interface::FeedDocument, &ci)); //промотка
         executeAndHandleError(std::bind(&classic_interface::CutCheck, &ci)); //отрезка
-
+        std::cerr << "all good" << std::endl;
         return EXIT_SUCCESS;
     } catch (const std::exception& e) {
         std::cerr << e.what() << std::endl;
