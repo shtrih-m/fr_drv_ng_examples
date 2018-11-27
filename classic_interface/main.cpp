@@ -501,6 +501,52 @@ static void printBasicLines(classic_interface* ci)
     }
 }
 
+/*!
+ * \brief fsCorrectionReceipt пример печати чека коррекции FNBuildCorrectionReceipt2
+ * \param ci
+ */
+static void fsCorrectionReceipt(classic_interface* ci)
+{
+    PasswordHolder ph(ci, ci->Get_SysAdminPassword());
+
+    //начало чека коррекции
+    executeAndHandleError(std::bind(&classic_interface::FNBeginCorrectionReceipt, ci));
+
+    //отправка тэгов
+
+    //устанавливаем тег 1177 наименование основания для коррекции
+    ci->Set_TagNumber(1177);
+    ci->Set_TagType(7); //Тип "строка"
+    ci->Set_TagValueStr("correction name");
+    executeAndHandleError(std::bind(&classic_interface::FNSendTag, ci));
+
+    //здесь устанавливаем тег 1178 дата документа основания для коррекции
+
+    //устанавливаем тег 1179 номер документа основания для коррекции
+    ci->Set_TagNumber(1179);
+    ci->Set_TagType(7);//Тип "строка"
+    ci->Set_TagValueStr("12345");
+    executeAndHandleError(std::bind(&classic_interface::FNSendTag, ci));
+
+    //печать чека коррекции
+    ci->Set_Summ1(3000);//сумма коррекции
+    ci->Set_Summ2(2000);
+    ci->Set_Summ3(1000);
+    ci->Set_Summ4(0);
+    ci->Set_Summ5(0);
+    ci->Set_Summ6(0);
+    ci->Set_Summ7(0);
+    ci->Set_Summ8(0);
+    ci->Set_Summ9(0);
+    ci->Set_Summ10(0);
+    ci->Set_Summ11(0);
+    ci->Set_Summ12(0);
+    ci->Set_CorrectionType(0);//Тип коррекции "самостоятельно"
+    ci->Set_CalculationSign(1);//признак расчета "коррекция прихода"
+    ci->Set_TaxType(1);//схема налогообложения "основная"
+    executeAndHandleError(std::bind(&classic_interface::FNBuildCorrectionReceipt2, ci));
+}
+
 int main(int argc, char* argv[])
 {
     try {
@@ -529,6 +575,7 @@ int main(int argc, char* argv[])
         printBasicLines(&ci);
         fsOperationReceipt(&ci);
         fsOperationReturnReceipt(&ci);
+        fsCorrectionReceipt(&ci);
         //        writeServiceTable(&ci); // пример записи сервисной таблицы
         exchangeBytes(&ci); //посылка произвольных данных
         cashierReceipt(&ci); //чек от кассира 1
