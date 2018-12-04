@@ -547,6 +547,58 @@ static void fsCorrectionReceipt(classic_interface* ci)
     executeAndHandleError(std::bind(&classic_interface::FNBuildCorrectionReceipt2, ci));
 }
 
+/*!
+ * \brief fsRegistrationReport пример печати отчета о регистрации FNBuildRegistrationReport
+ * \param ci
+ */
+static void fsRegistrationReport(classic_interface* ci)
+{
+    PasswordHolder ph(ci, ci->Get_SysAdminPassword());
+    //заполняем таблицы
+    // получаем номер таблицы "Фискальный Накопитель"
+    ci->Set_ModelParamNumber(classic_interface::DPE_FsTableNumber);
+    executeAndHandleError(std::bind(&classic_interface::ReadModelParamValue, ci));
+    auto fsTableNumber = ci->Get_ModelParamValue();
+
+    //Наименование пользователя
+    ci->Set_TableNumber(fsTableNumber);
+    ci->Set_RowNumber(1);
+    ci->Set_FieldNumber(7);
+    ci->Set_ValueOfFieldString("new user");
+    executeAndHandleError(std::bind(&classic_interface::WriteTable, ci));
+
+    //Адрес расчетов
+    ci->Set_TableNumber(fsTableNumber);
+    ci->Set_RowNumber(1);
+    ci->Set_FieldNumber(9);
+    ci->Set_ValueOfFieldString("new address");
+    executeAndHandleError(std::bind(&classic_interface::WriteTable, ci));
+
+    //Место расчетов
+    ci->Set_TableNumber(fsTableNumber);
+    ci->Set_RowNumber(1);
+    ci->Set_FieldNumber(14);
+    ci->Set_ValueOfFieldString("new place");
+    executeAndHandleError(std::bind(&classic_interface::WriteTable, ci));
+
+    //Начать формировать отчет о регистрации ККТ
+    ci->Set_ReportTypeInt(1);//Отчет о регистрации КТТ
+    executeAndHandleError(std::bind(&classic_interface::FNBeginRegistrationReport, ci));
+
+    //посылаем необходимые теги
+    ci->Set_TagNumber(1117);//тэг "адрес электронной почты отправителя чека"
+    ci->Set_TagType(7); //Тип "строка"
+    ci->Set_TagValueStr("example@example.org");
+    executeAndHandleError(std::bind(&classic_interface::FNSendTag, ci));
+
+    //Сформировать отчет о регистрации ККТ
+    ci->Set_INN("000000000000");
+    ci->Set_KKTRegistrationNumber("0000000837030527");
+    ci->Set_TaxType(32);//система налогообложения - ПСН
+    ci->Set_WorkMode(1);//режим работы - шифрование
+    executeAndHandleError(std::bind(&classic_interface::FNBuildRegistrationReport, ci));
+}
+
 int main(int argc, char* argv[])
 {
     try {
@@ -576,6 +628,7 @@ int main(int argc, char* argv[])
         fsOperationReceipt(&ci);
         fsOperationReturnReceipt(&ci);
         fsCorrectionReceipt(&ci);
+       // fsRegistrationReport(&ci);
         //        writeServiceTable(&ci); // пример записи сервисной таблицы
         exchangeBytes(&ci); //посылка произвольных данных
         cashierReceipt(&ci); //чек от кассира 1
