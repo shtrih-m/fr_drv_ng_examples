@@ -521,6 +521,10 @@ static void fsCorrectionReceipt(classic_interface* ci)
     executeAndHandleError(std::bind(&classic_interface::FNSendTag, ci));
 
     //здесь устанавливаем тег 1178 дата документа основания для коррекции
+    ci->Set_TagNumber(1178);
+    ci->Set_TagType(6); //Тип "время"
+    ci->Set_TagValueDateTime(3600*24*(365 + 365 + 365 + 366)*12);//1.01.2018 - 48 лет с 1.01.1970, в секундах
+    executeAndHandleError(std::bind(&classic_interface::FNSendTag, ci));
 
     //устанавливаем тег 1179 номер документа основания для коррекции
     ci->Set_TagNumber(1179);
