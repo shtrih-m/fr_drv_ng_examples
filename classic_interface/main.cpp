@@ -603,6 +603,48 @@ static void fsRegistrationReport(classic_interface* ci)
     executeAndHandleError(std::bind(&classic_interface::FNBuildRegistrationReport, ci));
 }
 
+/*!
+ * \brief ReceiptCopy пример печати "копии" чека
+ * \param ci
+ */
+static void ReceiptCopy(classic_interface* ci)
+{
+    PasswordHolder ph(ci, ci->Get_SysAdminPassword());
+    //необходимо заполнить свойство DocumentNumber - номер документа, копия которого нужна
+
+    //если нужно напечатать копию документа номер 3
+    //ci->Set_DocumentNumber(3);
+
+    //если нужно напечатать копию последнего документа
+    executeAndHandleError(std::bind(&classic_interface::FNGetStatus, ci));
+    //DocumentNumber теперь равен номеру последнего документа
+
+    ci->Set_ShowTagNumber(false);
+    executeAndHandleError(std::bind(&classic_interface::FNGetDocumentAsString, ci));
+
+    //все данные о чеке находятся в одной длинной строке StringForPrinting
+    std::string str = ci->Get_StringForPrinting();
+
+    //Данные разделены знаком новой строки. Разбиваем на строчки и печатаем
+    std::size_t already_print = 0;
+    std::string str2;
+    std::size_t eos;
+
+    while((eos = str.find('\n', already_print)) != std::string::npos)
+    {
+       str2 = str.substr(already_print, eos - already_print);
+       already_print = eos + 1;
+
+       ci->Set_StringForPrinting(str2);
+       executeAndHandleError(std::bind(&classic_interface::PrintString, ci));
+    }
+
+    str2 = str.substr(already_print);
+    if (!str2.empty()){
+        ci->Set_StringForPrinting(str2);
+        executeAndHandleError(std::bind(&classic_interface::PrintString, ci));
+    }
+}
 int main(int argc, char* argv[])
 {
     try {
@@ -630,6 +672,7 @@ int main(int argc, char* argv[])
         printBarcodeLineSwaps(&ci);
         printBasicLines(&ci);
         fsOperationReceipt(&ci);
+        ReceiptCopy(&ci);
         fsOperationReturnReceipt(&ci);
         fsCorrectionReceipt(&ci);
        // fsRegistrationReport(&ci);
