@@ -523,17 +523,25 @@ static void fsCorrectionReceipt(classic_interface* ci)
     //здесь устанавливаем тег 1178 дата документа основания для коррекции
     ci->Set_TagNumber(1178);
     ci->Set_TagType(6); //Тип "время"
-    ci->Set_TagValueDateTime(3600*24*(365 + 365 + 365 + 366)*12);//1.01.2018 - 48 лет с 1.01.1970, в секундах
+    std::time_t unixtime;
+    { // 1.01.2018 - 48 лет с 1.01.1970, в секундах
+        std::tm date20180101 = {};
+        date20180101.tm_year = 118;
+        date20180101.tm_mday = 1;
+        date20180101.tm_isdst = -1;
+        unixtime = timegm(&date20180101);
+    }
+    ci->Set_TagValueDateTime(unixtime);
     executeAndHandleError(std::bind(&classic_interface::FNSendTag, ci));
 
     //устанавливаем тег 1179 номер документа основания для коррекции
     ci->Set_TagNumber(1179);
-    ci->Set_TagType(7);//Тип "строка"
+    ci->Set_TagType(7); //Тип "строка"
     ci->Set_TagValueStr("12345");
     executeAndHandleError(std::bind(&classic_interface::FNSendTag, ci));
 
     //печать чека коррекции
-    ci->Set_Summ1(3000);//сумма коррекции
+    ci->Set_Summ1(3000); //сумма коррекции
     ci->Set_Summ2(2000);
     ci->Set_Summ3(1000);
     ci->Set_Summ4(0);
@@ -545,9 +553,9 @@ static void fsCorrectionReceipt(classic_interface* ci)
     ci->Set_Summ10(0);
     ci->Set_Summ11(0);
     ci->Set_Summ12(0);
-    ci->Set_CorrectionType(0);//Тип коррекции "самостоятельно"
-    ci->Set_CalculationSign(1);//признак расчета "коррекция прихода"
-    ci->Set_TaxType(1);//схема налогообложения "основная"
+    ci->Set_CorrectionType(0); //Тип коррекции "самостоятельно"
+    ci->Set_CalculationSign(1); //признак расчета "коррекция прихода"
+    ci->Set_TaxType(1); //схема налогообложения "основная"
     executeAndHandleError(std::bind(&classic_interface::FNBuildCorrectionReceipt2, ci));
 }
 
@@ -586,11 +594,11 @@ static void fsRegistrationReport(classic_interface* ci)
     executeAndHandleError(std::bind(&classic_interface::WriteTable, ci));
 
     //Начать формировать отчет о регистрации ККТ
-    ci->Set_ReportTypeInt(1);//Отчет о регистрации КТТ
+    ci->Set_ReportTypeInt(1); //Отчет о регистрации КТТ
     executeAndHandleError(std::bind(&classic_interface::FNBeginRegistrationReport, ci));
 
     //посылаем необходимые теги
-    ci->Set_TagNumber(1117);//тэг "адрес электронной почты отправителя чека"
+    ci->Set_TagNumber(1117); //тэг "адрес электронной почты отправителя чека"
     ci->Set_TagType(7); //Тип "строка"
     ci->Set_TagValueStr("example@example.org");
     executeAndHandleError(std::bind(&classic_interface::FNSendTag, ci));
@@ -598,8 +606,8 @@ static void fsRegistrationReport(classic_interface* ci)
     //Сформировать отчет о регистрации ККТ
     ci->Set_INN("000000000000");
     ci->Set_KKTRegistrationNumber("0000000837030527");
-    ci->Set_TaxType(32);//система налогообложения - ПСН
-    ci->Set_WorkMode(1);//режим работы - шифрование
+    ci->Set_TaxType(32); //система налогообложения - ПСН
+    ci->Set_WorkMode(1); //режим работы - шифрование
     executeAndHandleError(std::bind(&classic_interface::FNBuildRegistrationReport, ci));
 }
 
@@ -613,11 +621,11 @@ static void ReceiptCopy(classic_interface* ci)
     //необходимо заполнить свойство DocumentNumber - номер документа, копия которого нужна
 
     //если нужно напечатать копию документа номер 3
-    //ci->Set_DocumentNumber(3);
+    // ci->Set_DocumentNumber(3);
 
     //если нужно напечатать копию последнего документа
     executeAndHandleError(std::bind(&classic_interface::FNGetStatus, ci));
-    //DocumentNumber теперь равен номеру последнего документа
+    // DocumentNumber теперь равен номеру последнего документа
 
     ci->Set_ShowTagNumber(false);
     executeAndHandleError(std::bind(&classic_interface::FNGetDocumentAsString, ci));
@@ -630,23 +638,47 @@ static void ReceiptCopy(classic_interface* ci)
     std::string str2;
     std::size_t eos;
 
-    while((eos = str.find('\n', already_print)) != std::string::npos)
-    {
-       str2 = str.substr(already_print, eos - already_print);
-       already_print = eos + 1;
+    while ((eos = str.find('\n', already_print)) != std::string::npos) {
+        str2 = str.substr(already_print, eos - already_print);
+        already_print = eos + 1;
 
-       ci->Set_StringForPrinting(str2);
-       executeAndHandleError(std::bind(&classic_interface::PrintString, ci));
+        ci->Set_StringForPrinting(str2);
+        executeAndHandleError(std::bind(&classic_interface::PrintString, ci));
     }
 
     str2 = str.substr(already_print);
-    if (!str2.empty()){
+    if (!str2.empty()) {
         ci->Set_StringForPrinting(str2);
         executeAndHandleError(std::bind(&classic_interface::PrintString, ci));
     }
 }
+
+/**
+ * @brief skipPrintNextDocs управление печатью последующих документов
+ * @param ci
+ * @param doSkip пропуск
+ */
+void skipPrintNextDocs(classic_interface* ci, bool doSkip)
+{
+    ci->Set_DeviceFunctionNumber(classic_interface::DFE_SkipAllPrinting);
+    ci->Set_ValueOfFunctionInteger(doSkip);
+    executeAndHandleError(std::bind(&classic_interface::SetDeviceFunction, ci));
+}
+/**
+ * @brief skipOneDocument как пропустить печать документа
+ * @param ci
+ */
+void skipOneDocument(classic_interface* ci)
+{
+    skipPrintNextDocs(ci, true);
+    fsOperationReceipt(ci);
+    skipPrintNextDocs(ci, false);
+}
+
 int main(int argc, char* argv[])
 {
+
+    return 0;
     try {
         //        classic_interface::setLogCallback([](const std::string& logmsg) { std::cerr <<
         //        logmsg; });
@@ -673,9 +705,10 @@ int main(int argc, char* argv[])
         printBasicLines(&ci);
         fsOperationReceipt(&ci);
         ReceiptCopy(&ci);
+        skipOneDocument(&ci);
         fsOperationReturnReceipt(&ci);
         fsCorrectionReceipt(&ci);
-       // fsRegistrationReport(&ci);
+        // fsRegistrationReport(&ci);
         //        writeServiceTable(&ci); // пример записи сервисной таблицы
         exchangeBytes(&ci); //посылка произвольных данных
         cashierReceipt(&ci); //чек от кассира 1
