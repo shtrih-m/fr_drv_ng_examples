@@ -677,8 +677,6 @@ void skipOneDocument(classic_interface* ci)
 
 int main(int argc, char* argv[])
 {
-
-    return 0;
     try {
         //        classic_interface::setLogCallback([](const std::string& logmsg) { std::cerr <<
         //        logmsg; });
