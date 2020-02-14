@@ -318,9 +318,61 @@ static void fsOperationReturnReceipt(classic_interface* ci)
     executeAndHandleError(std::bind(&classic_interface::FNCloseCheckEx, ci));
 }
 
+using AssignMark = int(classic_interface*);
+
+/**
+ * Передача кода маркировки через тег 1162
+ *
+ * Из кода маркировки самостояльно формируется значение тега 1162 в соответствии с ФФД
+ * и в ККТ передается уже готовы данные.
+ *
+ * Работает вне зависимости от версии драйвера и прошивки ККТ.
+*/
+int assignMarkWithTag1162(classic_interface* ci)
+{
+    ci->Set_TagNumber(1162);
+    ci->Set_TagType(9); // ttByteArray
+    ci->Set_BinaryConversion(classic_interface::TBinaryConversion::BINARY_CONVERSION_HEX);
+    ci->Set_TagValueBin("524652552D3430313330312D41414130323737303331");// марка: RU-401301-AAA0277031
+    return ci->FNSendTagOperation();
+}
+
+/**
+ * Передача кода маркировка посредством метода FNSendItemCodeData
+ *
+ * Из кода маркировки самостояльно извлекаются MarkingType, GTIN, SerialNumber,
+ * передаются в драйвер, драйвер из них формирует тег 1162 и передает в ККТ.
+ *
+ * Устарел.
+ *
+*/
+int assignMarkWithFNSendItemCodeData(classic_interface* ci)
+{
+    // марка 00000046198488X?io+qCABm8wAYa
+    ci->Set_MarkingType(0x444d);
+    ci->Set_GTIN("00000046198488");
+    ci->Set_SerialNumber("X?io+qCABm8");
+    return ci->FNSendItemCodeData();
+}
+
+/**
+ * Передача кода маркировка посредством метода FNSendItemBarcode
+ *
+ * В ККТ напрямую отправляется код маркировки.
+ *
+ * Требуется актуальная версия прошивки ККТ и функциональная лицензия.
+ *
+*/
+int assignMarkWithFNSendItemBarcode(classic_interface* ci)
+{
+    // марка 010460406000600021N4N57RSCBUZTQ\x1d2403004002910161218\x1d1724010191ffd0\x1d92tIAF/YVoU4roQS3M/m4z78yFq0fc/WsSmLeX5QkF/YVWwy8IMYAeiQ91Xa2z/fFSJcOkb2N+uUUmfr4n0mOX0Q==
+    ci->Set_BarCode("010460406000600021N4N57RSCBUZTQ\x1d""2403004002910161218\x1d""1724010191ffd0\x1d""92tIAF/YVoU4roQS3M/m4z78yFq0fc/WsSmLeX5QkF/YVWwy8IMYAeiQ91Xa2z/fFSJcOkb2N+uUUmfr4n0mOX0Q==");
+    return ci->FNSendItemBarcode();
+}
+
 /**
  * @brief fsOperationReceipt продвинутыми командами ФН
- * Передача КТН (тег 1162 для табачной продукции)
+ * Передача КТН разными способами
  * @param ci
  */
 static void fsOperationReceipt(classic_interface* ci)
@@ -331,11 +383,14 @@ static void fsOperationReceipt(classic_interface* ci)
         int64_t total; // -1 - рассчитывает касса, иначе сами
         const char* name;
         bool bGTINexample; // пример товара с маркировкой
+        AssignMark* assignMethod;
     };
     const Item items[] = {
         { 12300, 1.009456, -1, u8"Традиционное молоко", false },
-        { 4440, 4, 17761, u8"Товар", false }, //сумма с *ошибкой* на копейку
-        { 5000, 1, 5000, u8"Сигареты Прима", true },
+        { 4440, 4.0, 17761, u8"Товар", false }, //сумма с *ошибкой* на копейку
+        { 99900, 1.0, -1, u8"Шуба", true, &assignMarkWithTag1162 },
+        { 5000, 1.0, -1, u8"Сигареты Прима", true, &assignMarkWithFNSendItemCodeData },
+        { 23990, 1, -1, u8"Ботинки мужские", true, &assignMarkWithFNSendItemBarcode  },
     };
 
     prepareReceipt(ci);
@@ -348,7 +403,6 @@ static void fsOperationReceipt(classic_interface* ci)
         ci->Set_Quantity(item.quantity);
         ci->Set_Price(item.price);
         sum += item.price * item.quantity;
-
         ci->Set_Summ1Enabled(!(item.total == -1)); //рассчитывает касса
         ci->Set_Summ1(item.total);
         ci->Set_TaxValueEnabled(false);
@@ -359,17 +413,14 @@ static void fsOperationReceipt(classic_interface* ci)
         ci->Set_StringForPrinting(item.name);
         if (item.bGTINexample) {
             auto cashcore = isCashcore(ci); // узнаем на кассовом ядре мы работаем или нет
-            ci->Set_MarkingType(5); //Табачные изделия
-            ci->Set_GTIN("12345678901234"); // 14-ти значное число
-            ci->Set_SerialNumber("987654321001234567890123");
             if (cashcore) {
                 //посылать тег, привязанный к операции на cashcore(Кассовое Ядро) нужно ДО операции
-                executeAndHandleError(std::bind(&classic_interface::FNSendItemCodeData, ci));
+                executeAndHandleError(std::bind(item.assignMethod, ci));
             }
             executeAndHandleError(std::bind(&classic_interface::FNOperation, ci));
             if (!cashcore) {
                 //иначе ПОСЛЕ
-                executeAndHandleError(std::bind(&classic_interface::FNSendItemCodeData, ci));
+                executeAndHandleError(std::bind(item.assignMethod, ci));
             }
         } else {
             executeAndHandleError(std::bind(&classic_interface::FNOperation, ci));
@@ -500,6 +551,10 @@ static void printBasicLines(classic_interface* ci)
         executeAndHandleError(std::bind(&classic_interface::PrintStringWithFont, ci));
     }
 }
+
+#ifdef WIN32
+#define timegm _mkgmtime
+#endif
 
 /*!
  * \brief fsCorrectionReceipt пример печати чека коррекции FNBuildCorrectionReceipt2

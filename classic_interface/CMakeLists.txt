@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(classic_interface_example)
+set(CMAKE_CXX_STANDARD 14)
 IF (MSVC)
     add_definitions(-DUNICODE -D_UNICODE -D_CRT_SECURE_NO_WARNINGS)
 ENDIF()
