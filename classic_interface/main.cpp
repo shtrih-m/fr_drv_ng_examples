@@ -122,9 +122,8 @@ static void prepareReceipt(classic_interface* ci)
     switch (ci->Get_ECRMode()) {
     case classic_interface::PM_SessionOpenOver24h: {
         {
-            PasswordHolder ph(
-                ci, ci->Get_SysAdminPassword()); // для снятия Z отчета необходимо
-                                                 // воспользоваться паролем администратора
+            PasswordHolder ph(ci, ci->Get_SysAdminPassword()); // для снятия Z отчета необходимо
+                // воспользоваться паролем администратора
             executeAndHandleError(std::bind(&classic_interface::PrintReportWithCleaning,
                 ci)); //снимаем Z отчет если смена больше 24 часов
             executeAndHandleError(std::bind(&classic_interface::WaitForPrinting,
@@ -144,6 +143,7 @@ static void prepareReceipt(classic_interface* ci)
     }
     executeAndHandleError(std::bind(&classic_interface::WaitForPrinting, ci));
 }
+
 static void exchangeBytes(classic_interface* ci)
 {
     ci->Set_BinaryConversion(classic_interface::TBinaryConversion::BINARY_CONVERSION_HEX);
@@ -333,7 +333,8 @@ int assignMarkWithTag1162(classic_interface* ci)
     ci->Set_TagNumber(1162);
     ci->Set_TagType(9); // ttByteArray
     ci->Set_BinaryConversion(classic_interface::TBinaryConversion::BINARY_CONVERSION_HEX);
-    ci->Set_TagValueBin("524652552D3430313330312D41414130323737303331");// марка: RU-401301-AAA0277031
+    ci->Set_TagValueBin(
+        "524652552D3430313330312D41414130323737303331"); // марка: RU-401301-AAA0277031
     return ci->FNSendTagOperation();
 }
 
@@ -366,7 +367,11 @@ int assignMarkWithFNSendItemCodeData(classic_interface* ci)
 int assignMarkWithFNSendItemBarcode(classic_interface* ci)
 {
     // марка 010460406000600021N4N57RSCBUZTQ\x1d2403004002910161218\x1d1724010191ffd0\x1d92tIAF/YVoU4roQS3M/m4z78yFq0fc/WsSmLeX5QkF/YVWwy8IMYAeiQ91Xa2z/fFSJcOkb2N+uUUmfr4n0mOX0Q==
-    ci->Set_BarCode("010460406000600021N4N57RSCBUZTQ\x1d""2403004002910161218\x1d""1724010191ffd0\x1d""92tIAF/YVoU4roQS3M/m4z78yFq0fc/WsSmLeX5QkF/YVWwy8IMYAeiQ91Xa2z/fFSJcOkb2N+uUUmfr4n0mOX0Q==");
+    ci->Set_BarCode("010460406000600021N4N57RSCBUZTQ\x1d"
+                    "2403004002910161218\x1d"
+                    "1724010191ffd0\x1d"
+                    "92tIAF/YVoU4roQS3M/m4z78yFq0fc/WsSmLeX5QkF/YVWwy8IMYAeiQ91Xa2z/"
+                    "fFSJcOkb2N+uUUmfr4n0mOX0Q==");
     return ci->FNSendItemBarcode();
 }
 
@@ -390,7 +395,7 @@ static void fsOperationReceipt(classic_interface* ci)
         { 4440, 4.0, 17761, u8"Товар", false }, //сумма с *ошибкой* на копейку
         { 99900, 1.0, -1, u8"Шуба", true, &assignMarkWithTag1162 },
         { 5000, 1.0, -1, u8"Сигареты Прима", true, &assignMarkWithFNSendItemCodeData },
-        { 23990, 1, -1, u8"Ботинки мужские", true, &assignMarkWithFNSendItemBarcode  },
+        { 23990, 1, -1, u8"Ботинки мужские", true, &assignMarkWithFNSendItemBarcode },
     };
 
     prepareReceipt(ci);
@@ -740,7 +745,7 @@ int main(int argc, char* argv[])
         //            std::cout << "property modified: " << property << std::endl;
         //        });
         ci.Set_SCPassword(0); //Пароль ЦТО, нужен для установки нового пароля ЦТО + можно позже
-                              //воспользоваться для записи служебных таблиц(им необходим пароль ЦТО)
+            //воспользоваться для записи служебных таблиц(им необходим пароль ЦТО)
         ci.Set_SysAdminPassword(30); //Пароль сист. администратора
         ci.Set_Password(1); //Пароль кассира(может совпадать с паролем администратора)
         //        ci.Set_AutoEoD(true); //Включаем обмен с ОФД средствами драйвера
