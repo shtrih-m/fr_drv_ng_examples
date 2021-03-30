@@ -48,6 +48,30 @@ static int isCashcore(classic_interface* ci)
     checkResult(ci->ReadModelParamValue());
     return ci->Get_ModelParamValue();
 }
+/**
+ * @brief KKM_FFD_Version получить текущую версию ФФД из ККТ
+ * @param ci
+ * @return целое из
+ * 0 - 1.0
+ * 1 - 1.05_beta
+ * 2 - 1.05
+ * 3 - 1.1
+ * 4 - 1.2
+ */
+static int KKM_FFD_Version(classic_interface* ci)
+{
+    ci->Set_ModelParamNumber(classic_interface::DPE_FFDVersionTableNumber);
+    checkResult(ci->ReadModelParamValue());
+    auto table = ci->Get_ModelParamValue();
+    ci->Set_ModelParamNumber(classic_interface::DPE_FFDVersionFieldNumber);
+    checkResult(ci->ReadModelParamValue());
+    auto field = ci->Get_ModelParamValue();
+    ci->Set_TableNumber(table);
+    ci->Set_FieldNumber(field);
+    ci->Set_RowNumber(1);
+    checkResult(ci->ReadTable());
+    return ci->Get_ValueOfFieldInteger();
+}
 
 /**
  * @brief The PasswordHolder class
@@ -382,6 +406,9 @@ int assignMarkWithFNSendItemBarcode(classic_interface* ci)
  */
 static void fsOperationReceipt(classic_interface* ci)
 {
+    if (classic_fr_drv_ng_util::KKM_FFD_Version(ci) > 2) { //пример маркировки в 1.05
+        return;
+    }
     struct Item {
         int64_t price;
         double quantity;
@@ -429,6 +456,403 @@ static void fsOperationReceipt(classic_interface* ci)
             }
         } else {
             executeAndHandleError(std::bind(&classic_interface::FNOperation, ci));
+        }
+    }
+    auto cash_sum = 15000; //частично оплатим начлиными
+    auto electro_sum = sum - cash_sum; //остальное электронными
+    ci->Set_Summ1(cash_sum); // Наличные
+    ci->Set_Summ2(electro_sum); //Электронными
+    ci->Set_Summ3(0);
+    ci->Set_Summ4(0);
+    ci->Set_Summ5(0);
+    ci->Set_Summ6(0);
+    ci->Set_Summ7(0);
+    ci->Set_Summ8(0);
+    ci->Set_Summ9(0);
+    ci->Set_Summ10(0);
+    ci->Set_Summ11(0);
+    ci->Set_Summ12(0);
+    ci->Set_Summ13(0);
+    ci->Set_Summ14(0);
+    ci->Set_Summ15(0);
+    ci->Set_Summ16(0);
+    ci->Set_RoundingSumm(99); // Сумма округления
+    ci->Set_TaxValue1(0); // Налоги мы не считаем
+    ci->Set_TaxValue2(0);
+    ci->Set_TaxValue3(0);
+    ci->Set_TaxValue4(0);
+    ci->Set_TaxValue5(0);
+    ci->Set_TaxValue6(0);
+    ci->Set_TaxType(1); // Основная система налогообложения
+    ci->Set_StringForPrinting("");
+    executeAndHandleError(std::bind(&classic_interface::FNCloseCheckEx, ci));
+}
+
+static void fsOperationReceipt_FFD_1_2(classic_interface* ci)
+{
+    if (classic_fr_drv_ng_util::KKM_FFD_Version(ci) != 4) { //пример только для ФФД 1.2
+        return;
+    }
+    struct Item {
+        const int64_t price;
+        const double quantity;
+        const int64_t total; // -1 - рассчитывает касса, иначе сами
+        const char* name;
+        struct MarkingCode {
+
+            std::string value;
+            enum MC_Type {
+                MC_EAN_13,
+                MC_OTHER,
+            };
+            MC_Type type = MC_OTHER;
+            /**
+             * @brief need_check нужно ли проверять
+             * @return
+             */
+            bool need_check() const
+            {
+                return type != MC_EAN_13;
+            }
+            bool accepted = false; //принят ли КМ после проверки
+        };
+        std::vector<MarkingCode> markingCodes = {};
+        int measureUnitType = 0; //0 - по умолчанию - штуки
+        int paymentItemSign = 1; // признак предмета расчета
+        struct DivisionalQuantity { //дробное количество
+            bool isDivisionalQuantity = false;
+            int Numerator = 1;
+            int Denominator = 1;
+        };
+        DivisionalQuantity divisionalQuantity = {};
+    };
+    Item items[] = {
+        {
+            //пример, добавление EAN13 к позиции
+            6700,
+            1,
+            -1,
+            u8"Простоквашино",
+            {
+                { "4607053473537", Item::MarkingCode::MC_EAN_13 },
+            },
+
+        },
+        {
+            //пример проверки КМ
+            7000,
+            1.0,
+            -1,
+            u8"Традиционное молоко",
+            {
+                { "010304109478744321c_oMk?KrXtola\\u001d93dGVz" },
+            },
+        },
+        {
+            //пример дробного количества
+            60000,
+            1.0,
+            -1,
+            u8"Один Ботинок",
+            {
+                { "0101234567890123219hMDLVxH'SpllD"
+                  "\x1d"
+                  "910058"
+                  "\x1d"
+                  "9272OQ5lFw+rVcBDTJl5Edt+coEeUEOj2ypglP9olJEs/yepz7bmZwd4G/84WE9F0mlnMNNqb7w/"
+                  "hniTEBOEBzUw==" },
+            },
+            0, //штуки
+            33, //о реализуемом товаре, подлежащем маркировке средством идентификации, имеющем код маркировки, за исключением подакцизного товара
+            {
+                true,
+                1,
+                2,
+            },
+        },
+
+        {
+            9000,
+            1,
+            -1,
+            u8"Табачные изделия",
+            {
+                { "4606203089505", Item::MarkingCode::MC_EAN_13 },
+                { "00000046210654Wp\u0027h!H:AAPidGVz" },
+            },
+        },
+    };
+
+    prepareReceipt(ci);
+    int64_t sum = 0;
+    ci->Set_CheckType(0); //продажа
+    executeAndHandleError(std::bind(&classic_interface::OpenCheck, ci));
+
+    auto acceptOrDeclineMarkingItem = [](Item* item, Item::MarkingCode* mc, classic_interface* ci) {
+        // решение о принятии и отклонении товара исходя из результатов проверки КМ индивидуально
+        // и должно приниматься в зависимости от типа законодательства, мнения контрагентов итд.
+        // для примера мы не откажемся от одной позиции и
+        auto explainLocalCheck = [](auto value) {
+            std::string result;
+            result += "\n    ";
+            if (value & 1) {
+                result += u8"код маркировки проверен фискальным накопителем с использованием ключа "
+                          u8"проверки КП";
+            } else {
+                result += u8"код маркировки не может быть проверен фискальным накопителем с "
+                          u8"использованием ключа проверки КП";
+            }
+            result += "\n    ";
+            if (value & 1 << 1) {
+                result += u8"результат проверки КП КМ фискальным накопителем с использованием "
+                          u8"ключа проверки КП положительный";
+            } else {
+                result += u8"результат проверки КП КМ фискальным накопителем с использованием "
+                          u8"ключа проверки КП отрицательный (в случае, если значение нулевого "
+                          u8"бита равно «1») или код маркировки не может быть проверен фискальным "
+                          u8"накопителем с использованием ключа проверки КП (в случае, если "
+                          u8"значение нулевого бита равно «0»)";
+            }
+            result += "\n";
+            return result;
+        };
+        auto explainLocalError = [](auto value) {
+            std::string result;
+            result += "\n    ";
+            switch (value) {
+            case 0:
+                result += u8"КМ проверен в ФН";
+                break;
+            case 1:
+                result += u8"КМ данного типа не подлежит проверки в ФН";
+                break;
+            case 2:
+                result += u8"ФН не содержит ключ проверки кода проверки этого КМ";
+                break;
+            case 3:
+                result
+                    += u8"Проверка невозможна, так как отсутствуют идентификаторы применения GS1 "
+                       u8"91 и / или 92 или их формат неверный";
+                break;
+            case 4:
+                result += u8"Проверка КМ в ФН невозможна по иной причине";
+                break;
+            default:
+                result += u8"Неизвестная ошибка";
+                break;
+            }
+            return result;
+        };
+        auto explainMarkingType = [](auto value) {
+            std::string result;
+            result += "\n    ";
+            switch (value) {
+            case 0:
+                result
+                    += u8"Тип кода маркировки не идентифицирован (код маркировки отсутствует, не "
+                       u8"может быть прочитан или может быть прочитан, но не может быть распознан)";
+                break;
+            case 1:
+                result += u8"Короткий код маркировки";
+                break;
+            case 2:
+                result += u8"Код маркировки со значением кода проверки длиной 88 символов, "
+                          u8"подлежащим проверке в ФН";
+                break;
+            case 3:
+                result += u8"Код маркировки со значением кода проверки длиной 44 символа, не "
+                          u8"подлежащим проверке в ФН";
+                break;
+            case 4:
+                result += u8"Код маркировки со значением кода проверки длиной 44 символа, "
+                          u8"подлежащим проверке в ФН";
+                break;
+            case 5:
+                result += u8"Код маркировки со значением кода проверки длиной 4 символа, не "
+                          u8"подлежащим проверке в ФН";
+                break;
+            default:
+                result += u8"Неизвестная ошибка";
+                break;
+            }
+            return result;
+        };
+        auto explainOnlineCheckCode = [](auto error, auto status) {
+            std::string result;
+            result += "\n    ";
+            if (error == 0xff) {
+                result += u8"Таймаут проверки";
+            } else if (error == 0x20) {
+                switch (status) {
+                case 1:
+                    result += u8"Неверный фискальный признак ответа";
+                    break;
+                case 2:
+                    result += u8"Неверный формат реквизиов ответа";
+                    break;
+                case 3:
+                    result += u8"Неверный номер запроса в ответе";
+                    break;
+                case 4:
+                    result += u8"Неверный номер ФН";
+                    break;
+                case 5:
+                    result += u8"Неверный CRC блока данных";
+                    break;
+                case 7:
+                    result += u8"Неверная длина ответа";
+                    break;
+                }
+            } else {
+                if (status & 1 << 0) {
+                    result += u8"код маркировки проверен";
+                } else {
+                    result += u8" код маркировки не был проверен ФН и (или) ОИСМ";
+                }
+                result += "\n    ";
+                if (status & 1 << 1) {
+                    result += u8"результат проверки КП КМ положительный ";
+                } else {
+                    result += u8"сведения о статусе товара от ОИСМ не получены";
+                }
+                result += "\n    ";
+                if (status & 1 << 2) {
+                    result
+                        += u8"от ОИСМ получены сведения, что планируемый статус товара корректен";
+                } else {
+                    result += u8"сведения о статусе товара от ОИСМ не получены";
+                }
+                result += "\n    ";
+                if (status & 1 << 3) {
+                    result
+                        += u8"от ОИСМ получены сведения, что планируемый статус товара корректен";
+                } else {
+                    result += u8"от ОИСМ получены сведения, что планируемый статус товара "
+                              u8"некорректен или сведения о статусе товара от ОИСМ не получены";
+                }
+                result += "\n    ";
+                if (status & 1 << 4) {
+                    result += u8"результат проверки КП КМ сформирован ККТ, работающей в автономном "
+                              u8"режиме";
+                } else {
+                    result += u8"результат проверки КП КМ и статуса товара сформирован ККТ, "
+                              u8"работающей в режиме передачи данных";
+                }
+                result += "\n";
+            }
+            return result;
+        };
+        auto localCheck = ci->Get_CheckItemLocalResult();
+        auto localError = ci->Get_CheckItemLocalError();
+        auto markingType = ci->Get_MarkingType2();
+        auto onlineCheckError = ci->Get_KMServerErrorCode();
+        auto onlineCheckStatus = ci->Get_KMServerCheckingStatus();
+        std::cout << "item:\n  " << item->name << " : " << mc->value << '\n'
+                  << "  localCheck:" << explainLocalCheck(localCheck) << '\n'
+                  << "  localError:" << explainLocalError(localError) << '\n'
+                  << "  markingType:" << explainMarkingType(markingType) << '\n'
+                  << "  onlineCheckError:"
+                  << explainOnlineCheckCode(onlineCheckError, onlineCheckStatus) << '\n';
+
+        checkResult(ci->FNAcceptMakringCode()); //для примера все коды принимаем
+        mc->accepted = true;
+    };
+    auto makeItemBarcodeAdditionalTLV = [](const Item& item, classic_interface* ci) {
+        /** делааем TLV из меры количества и/или дробного количества, если позиция требует
+         * @brief result
+         */
+        std::vector<uint8_t> result;
+        if (item.measureUnitType != 0) {
+            //Если планируется частичное выбытие маркированного товара (согласно с тегом 2003),
+            // то необходимо сформировать буфер из тегов 2108 (мера) и 1023 (количество) и передать его здесь
+            ci->Set_TagNumber(2108); //Мера кол-ва
+            ci->Set_TagType(classic_interface::TT_Byte);
+            ci->Set_TagValueInt(item.measureUnitType);
+            checkResult(ci->GetTagAsTLV());
+            {
+                auto tmp_tlv = ci->Get_TLVData();
+                std::copy(
+                    std::begin(tmp_tlv), std::end(tmp_tlv), std::back_insert_iterator(result));
+            }
+            ci->Set_TagNumber(1023); // количество
+            ci->Set_TagType(classic_interface::TT_FVLN);
+            ci->Set_TagValueFVLN(item.quantity);
+            checkResult(ci->GetTagAsTLV());
+            {
+                auto tmp_tlv = ci->Get_TLVData();
+                std::copy(
+                    std::begin(tmp_tlv), std::end(tmp_tlv), std::back_insert_iterator(result));
+            }
+        }
+        if (item.divisionalQuantity.isDivisionalQuantity) {
+            ci->Set_TagNumber(1291);
+            ci->Set_TagType(classic_interface::TT_STLV);
+            checkResult(ci->FNBeginSTLVTag());
+            ci->Set_TagNumber(1293); //числитель
+            ci->Set_TagValueInt(item.divisionalQuantity.Numerator);
+            ci->Set_TagType(classic_interface::TT_VLN);
+            checkResult(ci->FNAddTag());
+            ci->Set_TagNumber(1294); //знаменатель
+            ci->Set_TagValueInt(item.divisionalQuantity.Denominator);
+            ci->Set_TagType(classic_interface::TT_VLN);
+            checkResult(ci->FNAddTag());
+            checkResult(ci->GetTagAsTLV());
+            {
+                auto tmp_tlv = ci->Get_TLVData();
+                std::copy(
+                    std::begin(tmp_tlv), std::end(tmp_tlv), std::back_insert_iterator(result));
+            }
+        }
+        return result;
+    };
+    //первая итерация - проверка кодов маркировки
+    for (auto& item : items) {
+        for (auto& mc : item.markingCodes) {
+            if (!mc.need_check()) {
+                continue;
+            }
+            ci->Set_BarCode(mc.value);
+            auto makePlannedStatus = [](const Item& /*item*/) { return 1; };
+            auto plannedStatus = makePlannedStatus(item);
+            ci->Set_ItemStatus(plannedStatus);
+            ci->Set_CheckItemMode(0); //Сейчас всегда 0
+            ci->Set_TLVData(makeItemBarcodeAdditionalTLV(item, ci));
+            auto ret = ci->FNCheckItemBarcode();
+            if (ret == 0) {
+                acceptOrDeclineMarkingItem(&item, &mc, ci);
+            } else if (ret == 211) { //для КМ игнорируем ошибку разбора разбора(211)
+                continue;
+            } else {
+                checkResult(ret); //бросаем еcли что не то
+            }
+        }
+    }
+    //вторая итерация - реализация
+    for (const auto& item : items) {
+
+        ci->Set_CheckType(1); //приход
+        ci->Set_Quantity(item.quantity);
+        ci->Set_Price(item.price);
+        sum += item.price * item.quantity;
+        ci->Set_Summ1Enabled(!(item.total == -1)); //рассчитывает касса
+        ci->Set_Summ1(item.total);
+        ci->Set_TaxValueEnabled(false);
+        ci->Set_Tax1(1); //НДС 18%
+        ci->Set_Department(1);
+        ci->Set_PaymentTypeSign(4); //полный рассчет
+        ci->Set_PaymentItemSign(item.paymentItemSign); //товар
+        ci->Set_StringForPrinting(item.name);
+
+        ci->Set_DivisionalQuantity(item.divisionalQuantity.isDivisionalQuantity);
+        ci->Set_Numerator(item.divisionalQuantity.Numerator);
+        ci->Set_Denominator(item.divisionalQuantity.Denominator);
+
+        ci->Set_MeasureUnit(item.measureUnitType);
+
+        executeAndHandleError(std::bind(&classic_interface::FNOperation, ci));
+        for (const auto& mc : item.markingCodes) {
+            ci->Set_BarCode(mc.value);
+            executeAndHandleError(std::bind(&classic_interface::FNSendItemBarcode, ci));
         }
     }
     auto cash_sum = 15000; //частично оплатим начлиными
@@ -753,11 +1177,11 @@ int main(int argc, char* argv[])
             //можно передать URI в качестве аргумента
             ci.Set_ConnectionURI(argv[1]);
         } else {
-            ci.Set_ConnectionURI(
-                "tcp://192.168.137.111:7778?timeout=3000&bytetimeout=1500&protocol=v1");
+            ci.Set_ConnectionURI("tcp://192.168.137.111:7778?timeout=30000");
         }
         checkResult(ci.Connect()); //соединяемся
         ci.Set_WaitForPrintingDelay(20); //задержка ожидания окончания печати
+        fsOperationReceipt_FFD_1_2(&ci);
         printLineSwaps(&ci);
         printBarcodeLineSwaps(&ci);
         printBasicLines(&ci);
