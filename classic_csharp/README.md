@@ -14,5 +14,6 @@ target_link_libraries(classic_fr_drv_ng_csharp classic_fr_drv_ng)
 ```
 3. запуск
 ```bash
-
+mcs -out:Program.exe *.cs
+mono Program.exe
 ```
