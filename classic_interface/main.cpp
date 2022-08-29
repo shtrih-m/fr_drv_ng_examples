@@ -1078,7 +1078,7 @@ static void fsRegistrationReport(classic_interface* ci)
     executeAndHandleError(std::bind(&classic_interface::WriteTable, ci));
 
     //Начать формировать отчет о регистрации ККТ
-    ci->Set_ReportTypeInt(1); //Отчет о регистрации КТТ
+    ci->Set_ReportTypeInt(0); //Отчет о регистрации ККТ
     executeAndHandleError(std::bind(&classic_interface::FNBeginRegistrationReport, ci));
 
     //посылаем необходимые теги
