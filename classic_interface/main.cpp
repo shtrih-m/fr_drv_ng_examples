@@ -1077,8 +1077,8 @@ static void fsRegistrationReport(classic_interface* ci)
     ci->Set_ValueOfFieldString("new place");
     executeAndHandleError(std::bind(&classic_interface::WriteTable, ci));
 
-    //Начать формировать отчет о регистрации ККТ
-    ci->Set_ReportTypeInt(1); //Отчет о регистрации КТТ
+    //Начать формировать отчет о пере/регистрации ККТ
+    ci->Set_ReportTypeInt(1); //Отчет об изменении параметров регистрации ККТ, в связи с заменой ФН
     executeAndHandleError(std::bind(&classic_interface::FNBeginRegistrationReport, ci));
 
     //посылаем необходимые теги
