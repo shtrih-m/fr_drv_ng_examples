@@ -1,4 +1,4 @@
-#include "classic_interface.h"
+﻿#include "classic_interface.h"
 #include <exception>
 #include <functional>
 #include <iostream>
@@ -987,10 +987,16 @@ static void printBasicLines(classic_interface* ci)
 
 /*!
  * \brief fsCorrectionReceipt пример печати чека коррекции FNBuildCorrectionReceipt2
+ * \note ФФД 1.05
  * \param ci
  */
-static void fsCorrectionReceipt(classic_interface* ci)
+static void fsCorrectionReceipt_FFD_1_05(classic_interface* ci)
 {
+    // Пример чека коррекции только для ФФД 1.05
+    if (classic_fr_drv_ng_util::KKM_FFD_Version(ci) > 2) {
+        return;
+    }
+
     PasswordHolder ph(ci, ci->Get_SysAdminPassword());
 
     //начало чека коррекции
@@ -1041,6 +1047,92 @@ static void fsCorrectionReceipt(classic_interface* ci)
     ci->Set_CalculationSign(1); //признак расчета "коррекция прихода"
     ci->Set_TaxType(1); //схема налогообложения "основная"
     executeAndHandleError(std::bind(&classic_interface::FNBuildCorrectionReceipt2, ci));
+}
+
+/*!
+ * \brief fsCorrectionReceipt пример печати чека коррекции FNBuildCorrectionReceipt2
+ * \note ФФД 1.2
+ * \param ci
+ */
+static void fsCorrectionReceipt_FFD_1_2(classic_interface* ci)
+{
+    // Пример чека коррекции только для ФФД 1.2
+    if (classic_fr_drv_ng_util::KKM_FFD_Version(ci) != 4) {
+        return;
+    }
+
+    PasswordHolder ph(ci, ci->Get_SysAdminPassword());
+
+    //начало чека коррекции
+    ci->Set_CheckType(0);// Коррекция чека прихода
+    executeAndHandleError(std::bind(&classic_interface::FNOpenCheckCorrection, ci));
+
+    //отправка тегов
+    //устанавливаем тег 1173 тип коррекции
+    ci->Set_TagNumber(1173);
+    ci->Set_TagType(classic_interface::TT_Byte); // 0 - Тип Byte
+    ci->Set_TagValueInt(1); // 0 - cамоятоятельно, 1 - по предписанию
+    executeAndHandleError(std::bind(&classic_interface::FNSendTag, ci));
+    //устанавливаем тег 1178 дата документа основания для коррекции
+    ci->Set_TagNumber(1178);
+    ci->Set_TagType(classic_interface::TT_UnixTime); // 6 - Тип "время"
+    std::time_t unixtime;
+    { 
+        std::tm date2021_08_24  = {};
+        date2021_08_24.tm_year = 121; // 2021
+        date2021_08_24.tm_mon = 7; // август
+        date2021_08_24.tm_mday = 24; // 24
+        date2021_08_24.tm_isdst = -1;
+        unixtime = timegm(&date2021_08_24);
+    }
+    ci->Set_TagValueDateTime(unixtime);
+    executeAndHandleError(std::bind(&classic_interface::FNSendTag, ci));
+    //устанавливаем тег 1179 номер документа основания для коррекции
+    ci->Set_TagNumber(1179);
+    ci->Set_TagType(classic_interface::TT_String); // 7 - Тип "строка"
+    ci->Set_TagValueStr("12345");
+    executeAndHandleError(std::bind(&classic_interface::FNSendTag, ci));
+
+    // позиция
+    ci->Set_CheckType(1); //приход
+    ci->Set_Quantity(1.0);
+    ci->Set_Price(200);
+    ci->Set_Summ1Enabled(false); //рассчитывает касса
+    ci->Set_TaxValueEnabled(false);
+    ci->Set_Tax1(1); //НДС 20%
+    ci->Set_Department(1);
+    ci->Set_PaymentTypeSign(4); //полный рассчет
+    ci->Set_PaymentItemSign(1); //товар
+    ci->Set_StringForPrinting(u8"Булка");
+    executeAndHandleError(std::bind(&classic_interface::FNOperation, ci));
+
+    // закрытие чека
+    ci->Set_Summ1(3000); //сумма коррекции
+    ci->Set_Summ2(20);
+    ci->Set_Summ3(100);
+    ci->Set_Summ4(0);
+    ci->Set_Summ5(0);
+    ci->Set_Summ6(0);
+    ci->Set_Summ7(0);
+    ci->Set_Summ8(0);
+    ci->Set_Summ9(0);
+    ci->Set_Summ10(0);
+    ci->Set_Summ11(0);
+    ci->Set_Summ12(0);
+    ci->Set_Summ13(0);
+    ci->Set_Summ14(0);
+    ci->Set_Summ15(0);
+    ci->Set_Summ16(0);
+    ci->Set_RoundingSumm(0);
+    ci->Set_TaxValue1(0);
+    ci->Set_TaxValue2(0);
+    ci->Set_TaxValue3(0);
+    ci->Set_TaxValue4(0);
+    ci->Set_TaxValue5(0);
+    ci->Set_TaxValue6(0);
+    ci->Set_TaxType(1); // ОСН
+    ci->Set_StringForPrinting("");
+    executeAndHandleError(std::bind(&classic_interface::FNCloseCheckEx, ci));
 }
 
 /*!
@@ -1189,7 +1281,8 @@ int main(int argc, char* argv[])
         ReceiptCopy(&ci);
         skipOneDocument(&ci);
         fsOperationReturnReceipt(&ci);
-        fsCorrectionReceipt(&ci);
+        fsCorrectionReceipt_FFD_1_05(&ci);
+        fsCorrectionReceipt_FFD_1_2(&ci);
         // fsRegistrationReport(&ci);
         //        writeServiceTable(&ci); // пример записи сервисной таблицы
         exchangeBytes(&ci); //посылка произвольных данных
