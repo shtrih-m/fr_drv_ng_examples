@@ -9,24 +9,21 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Spinner;
 
-import java.util.Vector;
-import java.util.concurrent.Callable;
-
 import libcore.io.Libcore;
 import ru.shtrih_m.classic_fr_drv_ng_example.ExampleStuff;
+import ru.shtrih_m.fr_drv_ng.android_util.StaticContext;
 import ru.shtrih_m.fr_drv_ng.android_util.UsbCdcAcmHelper;
 import ru.shtrih_m.fr_drv_ng.classic_interface.classic_interface;
 
 
 public class MainActivity extends AppCompatActivity {
 
+    private static final String TAG = "MainActivity";
     EditText m_editURL;
     EditText m_editError;
     Button m_btnGo;
     Spinner m_uriSpinner;
     UsbCdcAcmHelper m_usbHelper;
-
-
 
 
     void exampleReceipt() {
@@ -63,8 +60,10 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        StaticContext.setContextFromActivity(this); //чтобы автоматически запрашивать разрешения при попытке установить связь по bluetooth
         m_usbHelper = new UsbCdcAcmHelper(this);
         m_usbHelper.register();
+
         try {
             Libcore.os.setenv("FR_DRV_DEBUG_CONSOLE", "1", true);//выводим лог в logcat, а не в файл.
 //            String LOG_FILE = Environment.getExternalStorageDirectory().getPath() + File.separator+"fr_drv_ng.log";
@@ -102,4 +101,5 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
+
 }
